@@ -204,6 +204,7 @@ export default function KnittingApp() {
   const [markerMode, setMarkerMode]         = useState(false);
   const [zoom, setZoom]                     = useState(1);
   const [showSymbolKey, setShowSymbolKey]   = useState(true);
+  const [stitchPaletteOpen, setStitchPaletteOpen] = useState(true);
   const [isDrawing, setIsDrawing]           = useState(false);
 
   // ── Selection state ───────────────────────────────────────────────────
@@ -1139,34 +1140,84 @@ export default function KnittingApp() {
             </div>
 
             {/* ── Stitch palette ── */}
-            <div style={{marginBottom:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                <span style={{fontSize:10,color:C.muted,letterSpacing:1}}>STITCH TYPE</span>
-                <button onClick={()=>openModal("customStitch",{})} style={{...btnSecondary,fontSize:11,padding:"2px 10px",marginLeft:"auto"}}>➕ Custom stitch</button>
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",marginBottom:10}}>
+
+              {/* ── Header ── */}
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom: stitchPaletteOpen ? 10 : 0}}>
+                {/* Collapse toggle */}
+                <button
+                  onClick={()=>setStitchPaletteOpen(v=>!v)}
+                  title={stitchPaletteOpen?"Collapse stitch palette":"Expand stitch palette"}
+                  style={{background:"none",border:"none",cursor:"pointer",padding:"0 2px",fontSize:11,color:C.muted,lineHeight:1,transition:"transform 0.2s",transform:stitchPaletteOpen?"rotate(0deg)":"rotate(-90deg)"}}>
+                  ▾
+                </button>
+                <span style={{fontSize:10,color:C.muted,letterSpacing:1,fontWeight:600}}>STITCH TYPE</span>
+
+                {/* Current selection pill — shown when collapsed */}
+                {!stitchPaletteOpen&&(()=>{
+                  const st=[...BUILTIN_STITCHES,...customStitches].find(s=>s.id===selectedStitch);
+                  const s=getStitch(selectedStitch);
+                  const bg=selectedStitch==="mistake"?"#fdecea":(st?.shade||STITCH_SHADES[selectedStitch]||"#e8e0d8");
+                  const tc=selectedStitch==="mistake"?C.red:(STITCH_TEXT[selectedStitch]||"#3a2a1a");
+                  return (
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginLeft:4}}>
+                      <div style={{width:20,height:20,borderRadius:3,background:bg,border:`2px solid ${C.text}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:tc,fontWeight:"bold"}}>{s.symbol||"–"}</div>
+                      <span style={{fontSize:11,color:C.text,fontWeight:"bold"}}>{s.abbr}</span>
+                      <span style={{fontSize:11,color:C.muted}}>— {s.label}</span>
+                    </div>
+                  );
+                })()}
+
+                <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}>
+                  <button onClick={()=>openModal("customStitch",{})} style={{...btnSecondary,fontSize:11,padding:"2px 10px"}}>＋ Custom</button>
+                  <button
+                    onClick={()=>{setSelectedStitch("empty");setSelMode(false);setMarkerMode(false);}}
+                    title="Erase — paint cells empty"
+                    style={{...btnSecondary,fontSize:11,padding:"2px 10px",color:selectedStitch==="empty"&&!selMode&&!markerMode?C.text:C.muted,fontWeight:selectedStitch==="empty"&&!selMode&&!markerMode?"bold":"normal",border:selectedStitch==="empty"&&!selMode&&!markerMode?`1.5px solid ${C.text}`:`1px solid ${C.border}`}}>
+                    ⊠ Erase
+                  </button>
+                </div>
               </div>
-              {GROUPS.filter(g=>g!=="custom"||customStitches.length>0).map(group=>{
-                const stitches=[...BUILTIN_STITCHES,...customStitches].filter(s=>s.group===group);
-                if(!stitches.length)return null;
-                return (
-                  <div key={group} style={{display:"flex",alignItems:"center",gap:4,marginBottom:4,flexWrap:"wrap"}}>
-                    <span style={{fontSize:9,color:C.muted,minWidth:64,textAlign:"right",flexShrink:0}}>{GROUP_LABELS[group]}</span>
-                    {stitches.map(st=>{
+
+              {/* ── Body (collapsible) ── */}
+              {stitchPaletteOpen&&(
+                <>
+                  {/* All stitches as icon-only buttons, matching the stitch key box style */}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {[...BUILTIN_STITCHES,...customStitches].filter(s=>s.id!=="empty").map(st=>{
                       const s=getStitch(st.id);
                       const bg=st.id==="mistake"?"#fdecea":(st.shade||STITCH_SHADES[st.id]||"#e8e0d8");
                       const tc=st.id==="mistake"?C.red:(STITCH_TEXT[st.id]||"#3a2a1a");
+                      const isSelected=selectedStitch===st.id&&!selMode&&!markerMode;
                       return (
-                        <button key={st.id} onClick={()=>{setSelectedStitch(st.id);setSelMode(false);setMarkerMode(false);}}
+                        <button
+                          key={st.id}
+                          onClick={()=>{setSelectedStitch(st.id);setSelMode(false);setMarkerMode(false);}}
                           onDoubleClick={()=>{if(st.group!=="marker"&&st.id!=="empty")openModal("editStitch",{id:st.id,label:s.label,abbr:s.abbr,currentSymbol:s.symbol,currentDesc:s.desc||""});}}
                           title={`${s.label} (${s.abbr})${s.desc?` — ${s.desc}`:""}\nDouble-click to edit`}
-                          style={{width:34,height:34,borderRadius:4,background:bg,border:selectedStitch===st.id&&!selMode&&!markerMode?`2px solid ${C.text}`:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:tc,fontWeight:"bold",boxShadow:selectedStitch===st.id&&!selMode&&!markerMode?"0 2px 6px rgba(0,0,0,0.15)":"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.1s",position:"relative"}}>
+                          style={{width:24,height:24,borderRadius:4,background:bg,border:isSelected?`2px solid ${C.text}`:`1px solid ${C.border}`,cursor:"pointer",fontSize:12,color:tc,fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative",boxShadow:isSelected?"0 2px 6px rgba(0,0,0,0.18)":"none",transition:"box-shadow 0.1s, border 0.1s",padding:0,fontFamily:"inherit"}}>
                           {s.symbol||<span style={{fontSize:8,color:"#bbb"}}>–</span>}
-                          {stitchOverrides[st.id]&&<span style={{position:"absolute",top:1,right:2,fontSize:6,color:C.accent}}>✎</span>}
+                          {stitchOverrides[st.id]&&<span style={{position:"absolute",top:-3,right:-3,fontSize:6,color:C.accent,background:C.surface,borderRadius:"50%",width:8,height:8,lineHeight:"8px",textAlign:"center"}}>✎</span>}
+                          {st.group==="custom"&&<span onClick={e=>{e.stopPropagation();setCustomStitches(p=>p.filter(x=>x.id!==st.id));}} style={{position:"absolute",top:-4,right:-4,fontSize:8,color:"#fff",background:C.muted,borderRadius:"50%",width:10,height:10,lineHeight:"10px",textAlign:"center",cursor:"pointer",display:"none"}} className="custom-remove">✕</span>}
                         </button>
                       );
                     })}
                   </div>
-                );
-              })}
+
+                  {/* ── Footer status ── */}
+                  <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:6,display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{fontSize:9,color:C.accent,fontWeight:"bold"}}>▶</span>
+                    <span style={{fontSize:11,fontWeight:"bold",color:C.text}}>
+                      {selMode?"Select":markerMode?"Markers":getStitch(selectedStitch).label}
+                    </span>
+                    <span style={{fontSize:10,color:C.muted}}>—</span>
+                    <span style={{fontSize:10,color:C.muted,fontStyle:"italic"}}>
+                      {selMode?"Selection mode":markerMode?"Stitch marker mode":(getStitch(selectedStitch).desc||"")}
+                    </span>
+                  </div>
+                </>
+              )}
+
             </div>
 
             {/* ── Toolbar ── */}
