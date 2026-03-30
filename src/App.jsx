@@ -1720,7 +1720,7 @@ export default function KnittingApp() {
             {/* Coordinate bar */}
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,fontFamily:"monospace",fontSize:11,userSelect:"none"}}>
               {hoverCell
-                ? <><span style={{color:C.text}}>col <strong>{hoverCell.col+1}</strong></span><span style={{color:C.muted}}>·</span><span style={{color:C.text}}>row <strong>{gridRows-hoverCell.row}</strong></span></>
+                ? <><span style={{color:C.text}}>col <strong>{hoverCell.col}</strong></span><span style={{color:C.muted}}>·</span><span style={{color:C.text}}>row <strong>{gridRows-hoverCell.row}</strong></span></>
                 : <span style={{color:C.border}}>— · —</span>}
               <span style={{color:C.border,marginLeft:4}}>{gridCols} × {gridRows}</span>
             </div>
@@ -1732,24 +1732,24 @@ export default function KnittingApp() {
                     <div style={{display:"flex",flexDirection:"column"}}>
                       <div style={{display:"flex"}}>
                         {Array.from({length:gridCols},(_,ci)=>{
-                          // ci=0 shows "0" (start marker); labels 10,20... and 5,15... use (ci+1) so they align with borderRight
-                          const n=ci+1,isZero=ci===0,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          // 0-indexed: ci=0 → label "0", ci=9 → label "10", etc.
+                          const n=ci,isZero=n===0,isTen=n>0&&n%10===0,isFive=n>0&&n%5===0&&!isTen,isCurCol=ci===currentCol;
                           const showNum=isCurCol||isZero||isTen||isFive;
-                          const label=isZero?0:n;
                           return <div key={ci} onClick={()=>setCurrentCol(isCurCol?null:ci)}
-                            title={isCurCol?`Col ${label} — click to clear`:`Click to mark col ${label}`}
+                            title={isCurCol?`Col ${n} — click to clear`:`Click to mark col ${n}`}
                             style={{width:cellSize,flexShrink:0,textAlign:"center",fontSize:8,lineHeight:"14px",cursor:"pointer",
                               color:isCurCol?contrastText(C.accent):(isZero||isTen)?C.accent:C.muted,
                               fontWeight:(isCurCol||isZero||isTen)?"bold":"normal",
                               background:isCurCol?C.accent:"transparent",borderRadius:isCurCol?2:0}}>
-                            {showNum?label:""}
+                            {showNum?n:""}
                           </div>;
                         })}
                       </div>
                       <div style={{display:"flex"}}>
                         {Array.from({length:gridCols},(_,ci)=>{
-                          const n=ci+1,isZero=ci===0,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          const n=ci,isZero=n===0,isTen=n>0&&n%10===0,isFive=n>0&&n%5===0&&!isTen,isCurCol=ci===currentCol;
                           const isHov=hoverCell&&hoverCell.col===ci;
+                          // 10th/0 tick: 8px 2px wide; 5th tick: 4px 1.5px wide; curCol/hover override
                           const h=isCurCol?8:(isZero||isTen)?8:isFive?4:0;
                           const w=isCurCol?2:(isZero||isTen)?2:1.5;
                           const bg=isCurCol?C.accent:isHov?"#4a90d9":C.accent;
@@ -1852,7 +1852,7 @@ export default function KnittingApp() {
                       </div>
                       {Array.from({length:gridCols},(_,ci)=>{
                         const isTenCol=(ci+1)%10===0,isFiveCol=(ci+1)%5===0&&!isTenCol;
-                        return <div key={ci} style={{width:cellSize,height:cellSize,flexShrink:0,background:STITCH_SHADES["co"],border:`0.5px solid rgba(100,80,60,0.3)`,borderRight:isTenCol?`2px solid ${C.accent}`:isFiveCol?`1.5px solid ${C.accent}`:`0.5px solid rgba(100,80,60,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(8,cellSize*0.44),color:STITCH_TEXT["co"],fontWeight:"bold",cursor:"default"}}>{getStitch("co").symbol}</div>;
+                        return <div key={ci} style={{width:cellSize,height:cellSize,flexShrink:0,background:STITCH_SHADES["co"],border:`0.5px solid rgba(100,80,60,0.3)`,borderRight:isTenCol?`2.5px solid ${C.accent}`:isFiveCol?`1.5px solid ${accentRgba(0.35)}`:`0.5px solid rgba(100,80,60,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(8,cellSize*0.44),color:STITCH_TEXT["co"],fontWeight:"bold",cursor:"default"}}>{getStitch("co").symbol}</div>;
                       })}
                     </div>
                     <ColRuler mt={2}/>
