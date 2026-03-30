@@ -1732,14 +1732,15 @@ export default function KnittingApp() {
                     <div style={{display:"flex",flexDirection:"column"}}>
                       <div style={{display:"flex"}}>
                         {Array.from({length:gridCols},(_,ci)=>{
-                          const n=ci+1,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          const n=ci+1,isFirst=n===1,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          const showNum=isCurCol||isFirst||isTen||isFive;
                           return <div key={ci} onClick={()=>setCurrentCol(isCurCol?null:ci)}
                             title={isCurCol?`Stitch ${n} — click to clear`:`Click to set position to stitch ${n}`}
                             style={{width:cellSize,flexShrink:0,textAlign:"center",fontSize:8,lineHeight:"14px",cursor:"pointer",
-                              color:isCurCol?contrastText(C.accent):isTen?C.accent:isFive?C.muted:"transparent",
+                              color:isCurCol?contrastText(C.accent):isTen?C.accent:C.muted,
                               fontWeight:(isCurCol||isTen)?"bold":"normal",
                               background:isCurCol?C.accent:"transparent",borderRadius:isCurCol?2:0}}>
-                            {isCurCol||isTen||isFive?n:""}
+                            {showNum?n:""}
                           </div>;
                         })}
                       </div>
@@ -1747,11 +1748,12 @@ export default function KnittingApp() {
                         {Array.from({length:gridCols},(_,ci)=>{
                           const n=ci+1,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
                           const isHov=hoverCell&&hoverCell.col===ci;
-                          const h=isCurCol?8:isTen?7:isFive?4:2;
-                          const bg=isCurCol?C.accent:isHov?"#4a90d9":isTen?C.accent:isFive?accentRgba(0.4):C.border;
-                          const w=isCurCol||isTen?2:1;
+                          // 10th tick: 8px tall 2px wide; 5th tick: 4px tall 1px wide (half); curCol/hover override
+                          const h=isCurCol?8:isTen?8:isFive?4:0;
+                          const w=isCurCol?2:isTen?2:1;
+                          const bg=isCurCol?C.accent:isHov?"#4a90d9":isTen?C.accent:accentRgba(0.45);
                           return <div key={ci} style={{width:cellSize,flexShrink:0,display:"flex",flexDirection:"column",justifyContent:"flex-start",alignItems:"center",position:"relative"}}>
-                            <div style={{width:w,height:h,background:bg,borderRadius:isCurCol?1:0,transition:"background 0.1s"}}/>
+                            {h>0&&<div style={{width:w,height:h,background:bg,transition:"background 0.1s"}}/>}
                             {isHov&&!isCurCol&&<div style={{position:"absolute",bottom:-1,width:0,height:0,borderLeft:"3px solid transparent",borderRight:"3px solid transparent",borderTop:"4px solid #4a90d9"}}/>}
                           </div>;
                         })}
@@ -1817,7 +1819,7 @@ export default function KnittingApp() {
                                   width:cellSize,height:cellSize,flexShrink:0,
                                   background:isActiveStitch?C.accent:inSel?accentRgba(0.18):isColPos?accentRgba(0.12):bg,
                                   border:`0.5px solid rgba(184,165,149,0.3)`,
-                                  borderRight:isTenCol?`2.5px solid ${C.accent}`:isFiveCol?`1.5px solid ${accentRgba(0.35)}`:`0.5px solid rgba(184,165,149,0.3)`,
+                                  borderRight:isTenCol?`2px solid ${C.accent}`:isFiveCol?`1px solid ${accentRgba(0.45)}`:`0.5px solid rgba(184,165,149,0.3)`,
                                   borderLeft:isColPos&&!isActiveStitch?`1.5px solid ${C.accent}`:`0.5px solid rgba(184,165,149,0.3)`,
                                   outline:isActiveStitch?`2px solid ${C.accent}`:inSel?`2px solid ${C.accent}`:mistake?`1.5px solid ${C.red}`:rep?`1.5px solid ${C.accent}`:undefined,
                                   outlineOffset:"-1px",
