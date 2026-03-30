@@ -1804,7 +1804,7 @@ export default function KnittingApp() {
                             const bg=mistake?"#fdecea":getCellBg(cell);
                             const tc=mistake?C.red:getCellText(cell);
                             const rep=getRepeat(ri,ci);
-                            const isTenCol=(ci+1)%10===0,isFiveCol=(ci+1)%5===0&&!isTenCol;
+                            const isTenCol=ci>0&&ci%10===0,isFiveCol=ci>0&&ci%5===0&&!isTenCol;
                             const inSel=inSelection(ri,ci);
                             const isMarked=stitchMarkers.has(`${ri}_${ci}`);
                             const isColPos=currentCol!==null&&ci===currentCol;
@@ -1851,8 +1851,8 @@ export default function KnittingApp() {
                         <span style={{fontSize:8,color:C.muted,fontStyle:"italic"}}>Cast On</span>
                       </div>
                       {Array.from({length:gridCols},(_,ci)=>{
-                        const isTenCol=(ci+1)%10===0,isFiveCol=(ci+1)%5===0&&!isTenCol;
-                        return <div key={ci} style={{width:cellSize,height:cellSize,flexShrink:0,background:STITCH_SHADES["co"],border:`0.5px solid rgba(100,80,60,0.3)`,borderRight:isTenCol?`2.5px solid ${C.accent}`:isFiveCol?`1.5px solid ${accentRgba(0.35)}`:`0.5px solid rgba(100,80,60,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(8,cellSize*0.44),color:STITCH_TEXT["co"],fontWeight:"bold",cursor:"default"}}>{getStitch("co").symbol}</div>;
+                        const isTenCol=ci>0&&ci%10===0,isFiveCol=ci>0&&ci%5===0&&!isTenCol;
+                        return <div key={ci} style={{width:cellSize,height:cellSize,flexShrink:0,background:STITCH_SHADES["co"],border:`0.5px solid rgba(100,80,60,0.3)`,borderRight:isTenCol?`2px solid ${C.accent}`:isFiveCol?`1.5px solid ${C.accent}`:`0.5px solid rgba(100,80,60,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(8,cellSize*0.44),color:STITCH_TEXT["co"],fontWeight:"bold",cursor:"default"}}>{getStitch("co").symbol}</div>;
                       })}
                     </div>
                     <ColRuler mt={2}/>
