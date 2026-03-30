@@ -376,9 +376,28 @@ export default function KnittingApp() {
 
   // ── Resize section ────────────────────────────────────────────────────
   const applyResize = ()=>{
-    const r=Math.max(1,Math.min(60,newRows)),c=Math.max(1,Math.min(60,newCols));
+    const r=Math.max(1,Math.min(200,newRows)),c=Math.max(1,Math.min(200,newCols));
     const ng=createGrid(r,c);
     for(let ri=0;ri<Math.min(r,grid.length);ri++) for(let ci=0;ci<Math.min(c,grid[0]?.length||0);ci++) ng[ri][ci]={...grid[ri][ci]};
+    updateActiveSection({rows:r,cols:c,grid:ng,completedRows:[],currentRow:r-1,rowWidths:{},mistakeMarkers:{},stitchMarkers:[],rowNotes:{}});
+    setSelection(null);setSelAction(null);closeModal();
+  };
+  const applyResizeDirectional = (orgRows,orgCols,dTop,dBottom,dLeft,dRight)=>{
+    const r=Math.max(1,orgRows+dTop+dBottom);
+    const c=Math.max(1,orgCols+dLeft+dRight);
+    const ng=createGrid(r,c);
+    // dTop>0 means rows added at top (existing rows shift down by dTop)
+    // dTop<0 means rows removed from top
+    const rowOffset=Math.max(0,dTop);
+    const colOffset=Math.max(0,dLeft);
+    const srcRowStart=Math.max(0,-dTop);
+    const srcColStart=Math.max(0,-dLeft);
+    const srcRows=Math.min(grid.length-srcRowStart,r-rowOffset);
+    const srcCols=Math.min((grid[0]?.length||0)-srcColStart,c-colOffset);
+    for(let ri=0;ri<srcRows;ri++) for(let ci=0;ci<srcCols;ci++){
+      if(ng[ri+rowOffset]&&ng[ri+rowOffset][ci+colOffset]&&grid[ri+srcRowStart]&&grid[ri+srcRowStart][ci+srcColStart])
+        ng[ri+rowOffset][ci+colOffset]={...grid[ri+srcRowStart][ci+srcColStart]};
+    }
     updateActiveSection({rows:r,cols:c,grid:ng,completedRows:[],currentRow:r-1,rowWidths:{},mistakeMarkers:{},stitchMarkers:[],rowNotes:{}});
     setSelection(null);setSelAction(null);closeModal();
   };
@@ -738,25 +757,130 @@ export default function KnittingApp() {
       )}
 
       {/* Resize */}
-      {modal==="resize"&&(
-        <Modal title="Resize Grid" onClose={closeModal} width={340}>
-          {[["Rows",newRows,setNewRows],["Columns",newCols,setNewCols]].map(([lbl2,val,setter])=>(
-            <div key={lbl2} style={{marginBottom:14}}>
-              <span style={lbl}>{lbl2} (1–60)</span>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>setter(v=>Math.max(1,v-1))} style={{...btnSecondary,padding:"5px 12px",fontSize:16}}>−</button>
-                <input type="number" value={val} min={1} max={60} onChange={e=>setter(Math.max(1,Math.min(60,+e.target.value||1)))} style={{...inp,textAlign:"center",width:70}}/>
-                <button onClick={()=>setter(v=>Math.min(60,v+1))} style={{...btnSecondary,padding:"5px 12px",fontSize:16}}>+</button>
+      {modal==="resize"&&(()=>{
+        const orgR=modalData.orgRows??gridRows, orgC=modalData.orgCols??gridCols;
+        const dTop=modalData.dTop??0, dBottom=modalData.dBottom??0;
+        const dLeft=modalData.dLeft??0, dRight=modalData.dRight??0;
+        const nR=Math.max(1,orgR+dTop+dBottom), nC=Math.max(1,orgC+dLeft+dRight);
+        const setD=(k,v)=>setModalData(d=>({...d,[k]:v}));
+
+        const PREV=160;
+        const maxDim=Math.max(nR,nC,orgR,orgC,1);
+        const sc=PREV/maxDim;
+        const orgW=Math.round(orgC*sc), orgH=Math.round(orgR*sc);
+        const newW=Math.round(nC*sc), newH=Math.round(nR*sc);
+
+        const Spin=({value,onChange,min=-200,max=200})=>(
+          <div style={{display:"inline-flex",alignItems:"center",border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden",height:22,background:C.surface}}>
+            <input type="number" value={value} onChange={e=>onChange(+e.target.value||0)}
+              style={{width:40,border:"none",padding:"0 4px",fontFamily:"inherit",fontSize:11,textAlign:"center",background:"transparent",color:C.text,outline:"none"}}/>
+            <div style={{display:"flex",flexDirection:"column",borderLeft:`1px solid ${C.border}`}}>
+              <button onClick={()=>onChange(Math.min(max,value+1))} style={{width:16,height:11,border:"none",background:C.surface2,cursor:"pointer",fontSize:7,color:C.muted,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>▲</button>
+              <button onClick={()=>onChange(Math.max(min,value-1))} style={{width:16,height:11,border:"none",borderTop:`1px solid ${C.border}`,background:C.surface2,cursor:"pointer",fontSize:7,color:C.muted,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>▼</button>
+            </div>
+          </div>
+        );
+
+        const fitToData=()=>{
+          let minR=grid.length-1,maxR=0,minCol=( grid[0]?.length||0)-1,maxCol=0,found=false;
+          for(let r=0;r<grid.length;r++) for(let c=0;c<(grid[r]?.length||0);c++){
+            const st=grid[r][c]?.stitch;
+            if(st&&st!=="knit"&&st!=="empty"){if(r<minR)minR=r;if(r>maxR)maxR=r;if(c<minCol)minCol=c;if(c>maxCol)maxCol=c;found=true;}
+          }
+          if(!found){minR=0;maxR=orgR-1;minCol=0;maxCol=orgC-1;}
+          setModalData(d=>({...d,dTop:0,dBottom:(maxR-minR+1)-orgR,dLeft:0,dRight:(maxCol-minCol+1)-orgC}));
+        };
+
+        return (
+          <Modal title="Resize Grid" onClose={closeModal} width={580}>
+            <div style={{display:"flex",gap:20}}>
+
+              {/* Visual preview */}
+              <div style={{width:PREV+24,height:PREV+24,background:"#6e6e6e",borderRadius:6,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                <div style={{position:"relative",width:Math.max(orgW,newW),height:Math.max(orgH,newH)}}>
+                  {/* new size — blue solid */}
+                  <div style={{position:"absolute",left:0,top:0,width:newW,height:newH,border:"3px solid #4488ff",background:"rgba(180,210,255,0.12)",boxSizing:"border-box"}}>
+                    <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",fontSize:9,color:"#4488ff",fontWeight:"bold",whiteSpace:"nowrap"}}>{nC}×{nR}</div>
+                  </div>
+                  {/* org size — green dashed */}
+                  <div style={{position:"absolute",left:0,top:0,width:orgW,height:orgH,border:"2px dashed #44cc66",boxSizing:"border-box",pointerEvents:"none"}}/>
+                  {/* dimension labels */}
+                  <div style={{position:"absolute",top:-16,left:0,width:newW,textAlign:"center",fontSize:9,color:"#4488ff",fontWeight:"bold"}}>{nC}</div>
+                  <div style={{position:"absolute",left:-18,top:0,height:newH,display:"flex",alignItems:"center",writingMode:"vertical-rl",transform:"rotate(180deg)",fontSize:9,color:"#4488ff",fontWeight:"bold"}}>{nR}</div>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div style={{flex:1,display:"flex",flexDirection:"column",gap:12}}>
+
+                {/* Org Size */}
+                <div>
+                  <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:4,fontWeight:600}}>ORG. SIZE</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:14,height:14,border:`2px dashed #44cc66`,borderRadius:2,flexShrink:0}}/>
+                    <span style={{fontSize:12,color:C.text,fontWeight:"bold"}}>{orgC} × {orgR}</span>
+                  </div>
+                </div>
+
+                {/* Diff with data */}
+                <div>
+                  <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:6,fontWeight:600}}>SPECIFY DIFF. (EDGES)</div>
+                  {/* Top */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,alignItems:"center",justifyItems:"center",width:180}}>
+                    <div/>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                      <span style={{fontSize:9,color:C.muted}}>Top</span>
+                      <Spin value={dTop} onChange={v=>setD("dTop",v)}/>
+                    </div>
+                    <div/>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                      <span style={{fontSize:9,color:C.muted}}>Left</span>
+                      <Spin value={dLeft} onChange={v=>setD("dLeft",v)}/>
+                    </div>
+                    <div style={{width:28,height:28,border:`2px solid #4488ff`,borderRadius:3}}/>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                      <span style={{fontSize:9,color:C.muted}}>Right</span>
+                      <Spin value={dRight} onChange={v=>setD("dRight",v)}/>
+                    </div>
+                    <div/>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                      <span style={{fontSize:9,color:C.muted}}>Bottom</span>
+                      <Spin value={dBottom} onChange={v=>setD("dBottom",v)}/>
+                    </div>
+                    <div/>
+                  </div>
+                </div>
+
+                {/* New Size */}
+                <div>
+                  <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:6,fontWeight:600}}>SPECIFY NEW SIZE</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:14,height:14,border:`2px solid #4488ff`,borderRadius:2,flexShrink:0}}/>
+                      <span style={{fontSize:11,color:C.muted,minWidth:40}}>Width</span>
+                      <Spin value={nC} min={1} max={200} onChange={v=>setD("dRight",v-orgC)}/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:14,height:14,flexShrink:0}}/>
+                      <span style={{fontSize:11,color:C.muted,minWidth:40}}>Height</span>
+                      <Spin value={nR} min={1} max={200} onChange={v=>setD("dBottom",v-orgR)}/>
+                    </div>
+                  </div>
+                </div>
+
+                <button onClick={fitToData} style={{...btnSecondary,fontSize:11,padding:"4px 12px",alignSelf:"flex-start"}}>Fit to data size</button>
+
               </div>
             </div>
-          ))}
-          <div style={{fontSize:11,color:C.muted,marginBottom:14}}>Existing stitches preserved where possible.</div>
-          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-            <button onClick={closeModal} style={btnSecondary}>Cancel</button>
-            <button onClick={applyResize} style={btnPrimary}>Apply</button>
-          </div>
-        </Modal>
-      )}
+
+            {/* Footer */}
+            <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.border}`,display:"flex",gap:10,justifyContent:"center"}}>
+              <button onClick={()=>applyResizeDirectional(orgR,orgC,dTop,dBottom,dLeft,dRight)} style={{...btnPrimary,padding:"6px 32px",fontSize:13}}>✓ OK</button>
+              <button onClick={closeModal} style={{...btnSecondary,padding:"6px 32px",fontSize:13}}>✕ Cancel</button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Edit stitch symbol */}
       {modal==="editStitch"&&(
@@ -1306,49 +1430,106 @@ export default function KnittingApp() {
             )}
 
             {/* ── Grid ── */}
-            <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"55vh"}}>
+            <div
+              style={{overflowX:"auto",overflowY:"auto",maxHeight:"60vh",position:"relative"}}
+              onMouseLeave={()=>setHoverCell(null)}
+              onMouseUp={handleMouseUp}
+            >
               {(()=>{
-                const ColRuler=({mt=0,mb=0})=>(
-                  <div style={{display:"flex",marginTop:mt,marginBottom:mb}}>
-                    <div style={{flexShrink:0,width:96}}/>
-                    <div style={{display:"flex",flexDirection:"column"}}>
-                      <div style={{display:"flex"}}>
-                        {Array.from({length:gridCols},(_,ci)=>{const n=ci+1,isTen=n%10===0,isFive=n%5===0;return <div key={ci} style={{width:cellSize,flexShrink:0,textAlign:"center",fontSize:8,lineHeight:"12px",color:isTen?C.accent:C.muted,fontWeight:isTen?"bold":"normal"}}>{isTen?n:isFive?"·":""}</div>;})}
+                const RULER_W=40;
+                const CTRL_W=52;
+
+                // Tick/ruler helpers
+                const topRuler=(
+                  <div style={{display:"flex",userSelect:"none",marginBottom:0}}>
+                    <div style={{flexShrink:0,width:RULER_W+CTRL_W}}/>
+                    <div style={{position:"relative"}}>
+                      {/* numbers */}
+                      <div style={{display:"flex",height:13}}>
+                        {Array.from({length:gridCols},(_,ci)=>{
+                          const n=ci+1,show=n===1||n%10===0;
+                          return (
+                            <div key={ci} style={{width:cellSize,flexShrink:0,position:"relative",textAlign:"center"}}>
+                              {show&&<span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",fontSize:8,color:n%10===0?C.text:C.muted,fontWeight:n%10===0?"bold":"normal",whiteSpace:"nowrap",lineHeight:"13px"}}>{n}</span>}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div style={{display:"flex"}}>
-                        {Array.from({length:gridCols},(_,ci)=>{const n=ci+1,isTen=n%10===0,isFive=n%5===0;return <div key={ci} style={{width:cellSize,flexShrink:0,display:"flex",justifyContent:"center",alignItems:"flex-start"}}>{(isFive||isTen)&&<div style={{width:isTen?2:1,height:isTen?7:4,background:isTen?C.accent:C.border}}/>}</div>;})}
+                      {/* ticks + hover arrow */}
+                      <div style={{display:"flex",height:8,position:"relative"}}>
+                        {Array.from({length:gridCols},(_,ci)=>{
+                          const n=ci+1,isTen=n%10===0,isFive=n%5===0,isFirst=n===1;
+                          const h=isTen||isFirst?7:isFive?4:2;
+                          const isHov=hoverCell&&hoverCell.col===ci;
+                          return (
+                            <div key={ci} style={{width:cellSize,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",position:"relative"}}>
+                              <div style={{width:isTen?2:1,height:h,background:isHov?"#4a90d9":isTen?C.text:C.border,transition:"background 0.1s"}}/>
+                              {isHov&&<div style={{position:"absolute",bottom:-1,width:0,height:0,borderLeft:"3px solid transparent",borderRight:"3px solid transparent",borderTop:"4px solid #4a90d9"}}/>}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
                 );
+
                 return (
                   <>
-                    <ColRuler mb={2}/>
+                    {/* Coordinate bar */}
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,paddingLeft:RULER_W+CTRL_W,fontFamily:"monospace",userSelect:"none"}}>
+                      <span style={{fontSize:11,color:C.text}}>
+                        {hoverCell
+                          ? <>(&#8201;<strong>{hoverCell.col+1}</strong>,&#8201;<strong>{gridRows-hoverCell.row}</strong>&#8201;)</>
+                          : <span style={{color:C.border}}>(&#8201;—&#8201;,&#8201;—&#8201;)</span>
+                        }
+                      </span>
+                      <span style={{fontSize:11,color:C.muted}}>&#8202;:&#8202;</span>
+                      <span style={{fontSize:11,color:C.muted}}>{gridCols} × {gridRows}</span>
+                    </div>
+
+                    {topRuler}
+
+                    {/* Rows */}
                     {grid.map((row,ri)=>{
                       const displayRow=gridRows-ri;
                       const done=completedRows.has(ri),isCurrent=ri===currentRow,hasNote=!!rowNotes[ri];
                       const rw=getRowWidth(ri),isCustomWidth=rowWidths[ri]!=null;
-                      const isFiveRow=displayRow%5===0,isTenRow=displayRow%10===0;
+                      const isTenRow=displayRow%10===0,isFiveRow=displayRow%5===0;
+                      const isHovRow=hoverCell&&hoverCell.row===ri;
                       return (
-                        <div key={ri} style={{display:"flex",alignItems:"center",background:isCurrent?accentRgba(0.07):"transparent",opacity:done?0.45:1,borderBottom:isTenRow?`2.5px solid ${C.accent}`:isFiveRow?`1.5px solid ${C.border}`:"none"}}>
-                          <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:3,paddingRight:4,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
+                        <div key={ri} style={{display:"flex",alignItems:"stretch",background:isCurrent?accentRgba(0.07):"transparent",opacity:done?0.45:1}}>
+
+                          {/* Left ruler */}
+                          <div style={{width:RULER_W,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:0,position:"relative",userSelect:"none"}}>
+                            {(displayRow===1||isTenRow)&&(
+                              <span style={{fontSize:8,color:isTenRow?C.text:C.muted,fontWeight:isTenRow?"bold":"normal",position:"absolute",right:10,lineHeight:`${cellSize}px`}}>{displayRow}</span>
+                            )}
+                            {/* tick */}
+                            <div style={{height:1,width:isTenRow?8:isFiveRow?5:2,background:isHovRow?"#4a90d9":isTenRow?C.text:C.border,flexShrink:0,transition:"background 0.1s"}}/>
+                            {/* hover arrow */}
+                            {isHovRow&&<div style={{position:"absolute",right:-1,width:0,height:0,borderTop:"3px solid transparent",borderBottom:"3px solid transparent",borderLeft:"4px solid #4a90d9"}}/>}
+                          </div>
+
+                          {/* Row controls */}
+                          <div style={{width:CTRL_W,flexShrink:0,display:"flex",alignItems:"center",gap:2,paddingLeft:2,paddingRight:3,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
                             <button onClick={()=>toggleRowComplete(ri)} style={{width:13,height:13,borderRadius:"50%",flexShrink:0,border:done?"none":`1px solid ${C.border}`,background:done?C.accent:"transparent",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                               {done&&<span style={{color:contrastText(C.accent),fontSize:7,fontWeight:"bold"}}>✓</span>}
                             </button>
-                            <span style={{fontSize:9,color:isCurrent?C.accent:isTenRow?C.accent:C.muted,fontWeight:(isCurrent||isTenRow)?"bold":"normal",minWidth:18,textAlign:"right",flexShrink:0}}>{displayRow}</span>
                             <button onClick={()=>setCurrentRow(ri)} style={{width:5,height:5,borderRadius:"50%",padding:0,border:"none",background:isCurrent?C.accent:"transparent",cursor:"pointer",flexShrink:0}}/>
                             <button onClick={()=>openModal("rowNote",{ri,text:rowNotes[ri]||""})} title="Row note" style={{width:13,height:13,borderRadius:2,padding:0,border:`1px solid ${hasNote?C.accent:C.border}`,background:hasNote?C.surface2:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:hasNote?C.accent:C.muted,flexShrink:0}}>✎</button>
                             <button onClick={()=>setRowWidth(ri,rw-1)} title="−1 stitch" style={{width:11,height:11,borderRadius:2,padding:0,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:8,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
-                            <span style={{fontSize:7,color:isCustomWidth?C.accent:"transparent",minWidth:10,textAlign:"center",flexShrink:0,cursor:isCustomWidth?"pointer":"default"}} onClick={()=>isCustomWidth&&resetRowWidth(ri)}>{isCustomWidth?rw:"·"}</span>
+                            <span style={{fontSize:7,color:isCustomWidth?C.accent:"transparent",minWidth:8,textAlign:"center",flexShrink:0,cursor:isCustomWidth?"pointer":"default"}} onClick={()=>isCustomWidth&&resetRowWidth(ri)}>{isCustomWidth?rw:"·"}</span>
                             <button onClick={()=>setRowWidth(ri,rw+1)} title="+1 stitch" style={{width:11,height:11,borderRadius:2,padding:0,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:8,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
                           </div>
+
+                          {/* Cells */}
                           {row.map((cell,ci)=>{
                             const s=getStitch(cell.stitch);
                             const mistake=hasMistake(ri,ci);
                             const bg=mistake?"#fdecea":getCellBg(cell);
                             const tc=mistake?C.red:getCellText(cell);
                             const rep=getRepeat(ri,ci);
-                            const isFiveCol=(ci+1)%5===0,isTenCol=(ci+1)%10===0;
+                            const isTenCol=(ci+1)%10===0,isFiveCol=(ci+1)%5===0;
                             const inSel=inSelection(ri,ci);
                             const isMarked=stitchMarkers.has(`${ri}_${ci}`);
                             return (
@@ -1361,8 +1542,10 @@ export default function KnittingApp() {
                                 style={{
                                   width:cellSize,height:cellSize,flexShrink:0,
                                   background:inSel?accentRgba(0.18):bg,
-                                  border:`0.5px solid rgba(184,165,149,0.3)`,
-                                  borderRight:isTenCol?`2.5px solid ${C.accent}`:isFiveCol?`1.5px solid ${C.border}`:`0.5px solid rgba(184,165,149,0.3)`,
+                                  borderTop:"1px dotted rgba(140,120,100,0.4)",
+                                  borderLeft:"1px dotted rgba(140,120,100,0.4)",
+                                  borderBottom:isTenRow?`2px solid ${C.text}`:isFiveRow?`1px solid ${C.border}`:"1px dotted rgba(140,120,100,0.4)",
+                                  borderRight:isTenCol?`2px solid ${C.text}`:isFiveCol?`1px solid ${C.border}`:"1px dotted rgba(140,120,100,0.4)",
                                   outline:inSel?`2px solid ${C.accent}`:mistake?`1.5px solid ${C.red}`:rep?`1.5px solid ${C.accent}`:undefined,
                                   outlineOffset:"-1px",
                                   display:"flex",alignItems:"center",justifyContent:"center",
@@ -1371,26 +1554,39 @@ export default function KnittingApp() {
                                   position:"relative",boxSizing:"border-box",
                                 }}>
                                 {mistake?"!":s.symbol}
-                                {isMarked&&<div style={{position:"absolute",inset:1,borderRadius:"50%",border:`2px solid #e04040`,pointerEvents:"none",zIndex:2}}/>}
+                                {/* Stitch marker — rendered as a pin at top-right corner */}
+                                {isMarked&&(
+                                  <div style={{position:"absolute",top:-7,right:-5,zIndex:10,pointerEvents:"none",display:"flex",flexDirection:"column",alignItems:"center"}}>
+                                    {/* pin head */}
+                                    <div style={{width:7,height:7,borderRadius:"50%",background:"#e04040",border:"1.5px solid #a00000",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
+                                    {/* pin shaft */}
+                                    <div style={{width:1.5,height:8,background:"#888",marginTop:0}}/>
+                                    {/* pin point */}
+                                    <div style={{width:0,height:0,borderLeft:"1.5px solid transparent",borderRight:"1.5px solid transparent",borderTop:"3px solid #666"}}/>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
-                          {hasNote&&<span style={{fontSize:9,color:C.muted,fontStyle:"italic",paddingLeft:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:160}}>{rowNotes[ri]}</span>}
+                          {hasNote&&<span style={{fontSize:9,color:C.muted,fontStyle:"italic",paddingLeft:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:160,alignSelf:"center"}}>{rowNotes[ri]}</span>}
                         </div>
                       );
                     })}
-                    {/* Row 0 */}
-                    <div style={{display:"flex",alignItems:"center",borderTop:`2px solid ${C.accent}`,marginTop:1}}>
-                      <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:4,paddingLeft:3}}>
-                        <span style={{fontSize:9,color:C.accent,fontWeight:"bold"}}>0</span>
+
+                    {/* Cast-on row */}
+                    <div style={{display:"flex",alignItems:"center",borderTop:`2px solid ${C.text}`,marginTop:0}}>
+                      <div style={{width:RULER_W+CTRL_W,flexShrink:0,display:"flex",alignItems:"center",gap:4,paddingLeft:RULER_W+6}}>
+                        <span style={{fontSize:9,color:C.text,fontWeight:"bold"}}>0</span>
                         <span style={{fontSize:8,color:C.muted,fontStyle:"italic"}}>Cast On</span>
                       </div>
                       {Array.from({length:gridCols},(_,ci)=>{
-                        const isFiveCol=(ci+1)%5===0,isTenCol=(ci+1)%10===0;
-                        return <div key={ci} style={{width:cellSize,height:cellSize,flexShrink:0,background:STITCH_SHADES["co"],border:`0.5px solid rgba(100,80,60,0.3)`,borderRight:isTenCol?`2.5px solid ${C.accent}`:isFiveCol?`1.5px solid ${C.border}`:`0.5px solid rgba(100,80,60,0.3)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(8,cellSize*0.44),color:STITCH_TEXT["co"],fontWeight:"bold",cursor:"default"}}>{getStitch("co").symbol}</div>;
+                        const isTenCol=(ci+1)%10===0,isFiveCol=(ci+1)%5===0;
+                        return <div key={ci} style={{width:cellSize,height:cellSize,flexShrink:0,background:STITCH_SHADES["co"],borderTop:"1px dotted rgba(100,80,60,0.3)",borderLeft:"1px dotted rgba(100,80,60,0.3)",borderBottom:"1px dotted rgba(100,80,60,0.3)",borderRight:isTenCol?`2px solid ${C.text}`:isFiveCol?`1px solid ${C.border}`:"1px dotted rgba(100,80,60,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(8,cellSize*0.44),color:STITCH_TEXT["co"],fontWeight:"bold",cursor:"default"}}>{getStitch("co").symbol}</div>;
                       })}
                     </div>
-                    <ColRuler mt={2}/>
+
+                    {/* Bottom ruler (mirror of top) */}
+                    {topRuler}
                   </>
                 );
               })()}
