@@ -1769,14 +1769,20 @@ export default function KnittingApp() {
                       const isFiveRow=displayRow%5===0,isTenRow=displayRow%10===0;
                       const isHovRow=hoverCell&&hoverCell.row===ri;
                       return (
-                        <div key={ri} style={{display:"flex",alignItems:"center",background:isCurrent?accentRgba(0.15):"transparent",opacity:done?0.45:1,borderBottom:isTenRow?`2.5px solid ${C.accent}`:isFiveRow?`1.5px solid ${C.border}`:"none",borderTop:isCurrent?`2px solid ${C.accent}`:"2px solid transparent",boxSizing:"border-box"}}>
+                        <div key={ri} style={{display:"flex",alignItems:"center",background:isCurrent?accentRgba(0.15):"transparent",opacity:done?0.45:1,borderBottom:isTenRow?`2.5px solid ${C.accent}`:isFiveRow?`1.5px solid ${C.border}`:"none",borderTop:isCurrent?`2px solid ${C.accent}`:"2px solid transparent",boxSizing:"border-box",position:"relative"}}>
                           <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:3,paddingRight:4,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
                             <button onClick={()=>toggleRowComplete(ri)} style={{width:13,height:13,borderRadius:"50%",flexShrink:0,border:done?"none":`1px solid ${C.border}`,background:done?C.accent:"transparent",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                               {done&&<span style={{color:contrastText(C.accent),fontSize:7,fontWeight:"bold"}}>✓</span>}
                             </button>
-                            <span style={{fontSize:9,color:isCurrent?C.accent:isHovRow?"#4a90d9":isTenRow?C.accent:C.muted,fontWeight:(isCurrent||isTenRow||isHovRow)?"bold":"normal",minWidth:18,textAlign:"right",flexShrink:0,transition:"color 0.1s",alignSelf:(isTenRow||isFiveRow)?"flex-end":"center",paddingBottom:(isTenRow||isFiveRow)?1:0}}>
-                              {(isTenRow||isFiveRow||isCurrent||isHovRow)?displayRow:""}
-                            </span>
+                            {/* Row number — absolute so it sits right at the bottom border */}
+                            {(isTenRow||isFiveRow||isCurrent||isHovRow)&&(
+                              <span style={{position:"absolute",bottom:1,left:18,fontSize:9,lineHeight:1,
+                                color:isCurrent?C.accent:isHovRow?"#4a90d9":isTenRow?C.accent:C.muted,
+                                fontWeight:(isCurrent||isTenRow||isHovRow)?"bold":"normal",
+                                transition:"color 0.1s",pointerEvents:"none",userSelect:"none"}}>
+                                {displayRow}
+                              </span>
+                            )}
                             <button onClick={()=>setCurrentRow(ri)} style={{width:5,height:5,borderRadius:"50%",padding:0,border:"none",background:isCurrent?C.accent:"transparent",cursor:"pointer",flexShrink:0}}/>
                             <button onClick={()=>openModal("rowNote",{ri,text:rowNotes[ri]||""})} title="Row note" style={{width:13,height:13,borderRadius:2,padding:0,border:`1px solid ${hasNote?C.accent:C.border}`,background:hasNote?C.surface2:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:hasNote?C.accent:C.muted,flexShrink:0}}>✎</button>
                             {(()=>{const rep=rowRepeats[ri];const hasRep=!!rep;const allDone=hasRep&&rep.done>=rep.total;return hasRep?(
