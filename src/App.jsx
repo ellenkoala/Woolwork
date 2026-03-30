@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 const DEFAULT_THEME = {
@@ -140,17 +140,28 @@ function buildSpinningHTML(sp,cpLine){
 
 // ══════════════════════════════════════════════════════════════════════════
 export default function KnittingApp() {
-  const [theme, setTheme] = useState(DEFAULT_THEME);
+  const [theme, setTheme] = useState(()=>{
+    try{const s=localStorage.getItem("ww_theme");return s?JSON.parse(s):DEFAULT_THEME;}catch{return DEFAULT_THEME;}
+  });
   const C = theme;
 
-  const [customStitches, setCustomStitches] = useState([]);
-  const [stitchOverrides, setStitchOverrides] = useState({});
+  const [customStitches, setCustomStitches] = useState(()=>{
+    try{const s=localStorage.getItem("ww_custom_stitches");return s?JSON.parse(s):[];}catch{return [];}
+  });
+  const [stitchOverrides, setStitchOverrides] = useState(()=>{
+    try{const s=localStorage.getItem("ww_stitch_overrides");return s?JSON.parse(s):{};}catch{return {};}
+  });
   const allStitches = () => [...BUILTIN_STITCHES, ...customStitches];
   const getStitch = id => { const base=allStitches().find(s=>s.id===id)||BUILTIN_STITCHES[0]; const ov=stitchOverrides[id]; return ov?{...base,...ov}:base; };
 
   // ── Projects ──────────────────────────────────────────────────────────
-  const [projects, setProjects] = useState(()=>INIT_PROJECTS.map(p=>({...p,activeSectionId:p.sections[0].id})));
-  const [activeProjectId, setActiveProjectId] = useState("p1");
+  const [projects, setProjects] = useState(()=>{
+    try{const s=localStorage.getItem("ww_projects");return s?JSON.parse(s):INIT_PROJECTS.map(p=>({...p,activeSectionId:p.sections[0].id}));}
+    catch{return INIT_PROJECTS.map(p=>({...p,activeSectionId:p.sections[0].id}));}
+  });
+  const [activeProjectId, setActiveProjectId] = useState(()=>{
+    try{return localStorage.getItem("ww_active_project_id")||"p1";}catch{return "p1";}
+  });
   const activeProject = projects.find(p=>p.id===activeProjectId)||projects[0];
   const yarnPalette   = activeProject.yarnPalette||[];
 
@@ -206,7 +217,9 @@ export default function KnittingApp() {
   const [pastePreview, setPastePreview] = useState(null); // {clipId, offsetR, offsetC}
 
   // ── App mode ──────────────────────────────────────────────────────────
-  const [appMode, setAppMode]     = useState("knitting"); // "knitting" | "spinning"
+  const [appMode, setAppMode]     = useState(()=>{
+    try{return localStorage.getItem("ww_app_mode")||"knitting";}catch{return "knitting";}
+  }); // "knitting" | "spinning"
 
   // ── Navigation / Modals ───────────────────────────────────────────────
   const [view, setView]           = useState("pattern");
@@ -237,8 +250,12 @@ export default function KnittingApp() {
   const setLog={date:logDate[1],hours:logHours[1],rowsFrom:logRowsFrom[1],rowsTo:logRowsTo[1],note:logNote[1]};
 
   // ── Spinning state ────────────────────────────────────────────────────
-  const [spinProjects,      setSpinProjects]      = useState([]);
-  const [activeSpinId,      setActiveSpinId]      = useState(null);
+  const [spinProjects,      setSpinProjects]      = useState(()=>{
+    try{const s=localStorage.getItem("ww_spin_projects");return s?JSON.parse(s):[];}catch{return [];}
+  });
+  const [activeSpinId,      setActiveSpinId]      = useState(()=>{
+    try{return localStorage.getItem("ww_active_spin_id")||null;}catch{return null;}
+  });
   const [spinView,          setSpinView]          = useState("projects");
   const [editingSpinProject,setEditingSpinProject]= useState(null);
   const [spinSearch,        setSpinSearch]        = useState("");
@@ -256,6 +273,16 @@ export default function KnittingApp() {
   const fileInputRef     = useRef();
   const photoInputRef    = useRef();
   const spinPhotoInputRef= useRef();
+
+  // ── localStorage persistence ──────────────────────────────────────────
+  useEffect(()=>{ try{localStorage.setItem("ww_projects",          JSON.stringify(projects));}catch{} }, [projects]);
+  useEffect(()=>{ try{localStorage.setItem("ww_active_project_id", activeProjectId);}catch{} },          [activeProjectId]);
+  useEffect(()=>{ try{localStorage.setItem("ww_spin_projects",     JSON.stringify(spinProjects));}catch{} }, [spinProjects]);
+  useEffect(()=>{ try{localStorage.setItem("ww_active_spin_id",    activeSpinId||"");}catch{} },          [activeSpinId]);
+  useEffect(()=>{ try{localStorage.setItem("ww_app_mode",          appMode);}catch{} },                   [appMode]);
+  useEffect(()=>{ try{localStorage.setItem("ww_theme",             JSON.stringify(theme));}catch{} },     [theme]);
+  useEffect(()=>{ try{localStorage.setItem("ww_custom_stitches",   JSON.stringify(customStitches));}catch{} }, [customStitches]);
+  useEffect(()=>{ try{localStorage.setItem("ww_stitch_overrides",  JSON.stringify(stitchOverrides));}catch{} }, [stitchOverrides]);
 
   // ── Derived ───────────────────────────────────────────────────────────
   const cellSize       = Math.round(22*zoom);
