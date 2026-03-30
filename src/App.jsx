@@ -205,6 +205,7 @@ export default function KnittingApp() {
   const [zoom, setZoom]                     = useState(1);
   const [showSymbolKey, setShowSymbolKey]   = useState(true);
   const [stitchPaletteOpen, setStitchPaletteOpen] = useState(true);
+  const [hoverCell, setHoverCell] = useState(null); // {row,col}
   const [isDrawing, setIsDrawing]           = useState(false);
 
   // ── Selection state ───────────────────────────────────────────────────
@@ -334,6 +335,7 @@ export default function KnittingApp() {
     else{setIsDrawing(true);paintCell(r,c);}
   };
   const handleCellEnter = (r,c)=>{
+    setHoverCell({row:r,col:c});
     if(selMode&&selDrag){setSelection(prev=>prev?{...prev,r2:r,c2:c}:null);}
     else if(isDrawing&&!markerMode&&!pastePreview){paintCell(r,c);}
   };
@@ -1255,7 +1257,7 @@ export default function KnittingApp() {
                   <span style={{padding:"4px 7px",fontSize:11,color:C.muted,borderLeft:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`}}>{Math.round(zoom*100)}%</span>
                   <button onClick={()=>setZoom(z=>Math.min(3,+(z+0.25).toFixed(2)))} style={{padding:"5px 9px",border:"none",background:"transparent",cursor:"pointer",fontSize:14,color:C.text,fontFamily:"inherit"}}>+</button>
                 </div>
-                <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize");}} style={btnSecondary}>⊞ Resize</button>
+                <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0});}} style={btnSecondary}>⊞ Resize</button>
                 <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Repeat</button>
                 <button onClick={()=>{setImportText("");setImportImage(null);setImportError("");openModal("import");}} style={btnPrimary}>🪄 Import</button>
                 <button onClick={()=>openModal("export",{exportContext:"knitting-project"})} style={btnSecondary}>⬇ Export</button>
