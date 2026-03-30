@@ -1744,7 +1744,17 @@ export default function KnittingApp() {
                         })}
                       </div>
                       <div style={{display:"flex"}}>
-                        {Array.from({length:gridCols},(_,ci)=>{const n=ci+1,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;return <div key={ci} style={{width:cellSize,flexShrink:0,display:"flex",justifyContent:"center",alignItems:"flex-start"}}>{isCurCol?<div style={{width:2,height:8,background:C.accent,borderRadius:1}}/>:isTen?<div style={{width:2,height:7,background:C.accent}}/>:isFive?<div style={{width:1,height:4,background:accentRgba(0.4)}}/>:null}</div>;})}
+                        {Array.from({length:gridCols},(_,ci)=>{
+                          const n=ci+1,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          const isHov=hoverCell&&hoverCell.col===ci;
+                          const h=isCurCol?8:isTen?7:isFive?4:2;
+                          const bg=isCurCol?C.accent:isHov?"#4a90d9":isTen?C.accent:isFive?accentRgba(0.4):C.border;
+                          const w=isCurCol||isTen?2:1;
+                          return <div key={ci} style={{width:cellSize,flexShrink:0,display:"flex",flexDirection:"column",justifyContent:"flex-start",alignItems:"center",position:"relative"}}>
+                            <div style={{width:w,height:h,background:bg,borderRadius:isCurCol?1:0,transition:"background 0.1s"}}/>
+                            {isHov&&!isCurCol&&<div style={{position:"absolute",bottom:-1,width:0,height:0,borderLeft:"3px solid transparent",borderRight:"3px solid transparent",borderTop:"4px solid #4a90d9"}}/>}
+                          </div>;
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1757,13 +1767,14 @@ export default function KnittingApp() {
                       const done=completedRows.has(ri),isCurrent=ri===currentRow,hasNote=!!rowNotes[ri];
                       const rw=getRowWidth(ri),isCustomWidth=rowWidths[ri]!=null;
                       const isFiveRow=displayRow%5===0,isTenRow=displayRow%10===0;
+                      const isHovRow=hoverCell&&hoverCell.row===ri;
                       return (
                         <div key={ri} style={{display:"flex",alignItems:"center",background:isCurrent?accentRgba(0.15):"transparent",opacity:done?0.45:1,borderBottom:isTenRow?`2.5px solid ${C.accent}`:isFiveRow?`1.5px solid ${C.border}`:"none",borderTop:isCurrent?`2px solid ${C.accent}`:"2px solid transparent",boxSizing:"border-box"}}>
                           <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:3,paddingRight:4,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
                             <button onClick={()=>toggleRowComplete(ri)} style={{width:13,height:13,borderRadius:"50%",flexShrink:0,border:done?"none":`1px solid ${C.border}`,background:done?C.accent:"transparent",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                               {done&&<span style={{color:contrastText(C.accent),fontSize:7,fontWeight:"bold"}}>✓</span>}
                             </button>
-                            <span style={{fontSize:9,color:isCurrent?C.accent:isTenRow?C.accent:C.muted,fontWeight:(isCurrent||isTenRow)?"bold":"normal",minWidth:18,textAlign:"right",flexShrink:0}}>{displayRow}</span>
+                            <span style={{fontSize:9,color:isCurrent?C.accent:isHovRow?"#4a90d9":isTenRow?C.accent:C.muted,fontWeight:(isCurrent||isTenRow||isHovRow)?"bold":"normal",minWidth:18,textAlign:"right",flexShrink:0,transition:"color 0.1s"}}>{displayRow}</span>
                             <button onClick={()=>setCurrentRow(ri)} style={{width:5,height:5,borderRadius:"50%",padding:0,border:"none",background:isCurrent?C.accent:"transparent",cursor:"pointer",flexShrink:0}}/>
                             <button onClick={()=>openModal("rowNote",{ri,text:rowNotes[ri]||""})} title="Row note" style={{width:13,height:13,borderRadius:2,padding:0,border:`1px solid ${hasNote?C.accent:C.border}`,background:hasNote?C.surface2:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:hasNote?C.accent:C.muted,flexShrink:0}}>✎</button>
                             {(()=>{const rep=rowRepeats[ri];const hasRep=!!rep;const allDone=hasRep&&rep.done>=rep.total;return hasRep?(
@@ -1774,6 +1785,7 @@ export default function KnittingApp() {
                             <button onClick={()=>setRowWidth(ri,rw-1)} title="−1 stitch" style={{width:11,height:11,borderRadius:2,padding:0,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:8,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
                             <span style={{fontSize:7,color:isCustomWidth?C.accent:"transparent",minWidth:10,textAlign:"center",flexShrink:0,cursor:isCustomWidth?"pointer":"default"}} onClick={()=>isCustomWidth&&resetRowWidth(ri)}>{isCustomWidth?rw:"·"}</span>
                             <button onClick={()=>setRowWidth(ri,rw+1)} title="+1 stitch" style={{width:11,height:11,borderRadius:2,padding:0,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:8,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
+                            {isHovRow&&!isCurrent&&<div style={{width:0,height:0,borderTop:"3px solid transparent",borderBottom:"3px solid transparent",borderLeft:"4px solid #4a90d9",flexShrink:0}}/>}
                           </div>
                           {row.map((cell,ci)=>{
                             const s=getStitch(cell.stitch);
