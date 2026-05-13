@@ -46,14 +46,28 @@ const SPIN_STATUSES = ["Active","Plying","Finished"];
 const FIBER_TYPES   = ["Merino","BFL","Corriedale","Corriedale Cross","Alpaca","Silk","Cashmere","Mohair","Linen","Cotton","Other"];
 const SPIN_TOOLS    = ["Wheel","Drop Spindle","Supported Spindle"];
 
+// ── Needle constants ────────────────────────────────────────────────────────
+const NEEDLE_TYPES = ["Circular","DPN","Straight","Interchangeable Tips"];
+const NEEDLE_BRANDS = ["Addi","ChiaoGoo","HiyaHiya","KnitPro","Lykke","Clover","Pony","Drops","Signature Needle Arts","Lantern Moon","Brittany","Tulip","Other"];
+const MM_TO_US = {"2.0":"0","2.25":"1","2.75":"2","3.25":"3","3.5":"4","3.75":"5","4.0":"6","4.5":"7","5.0":"8","5.5":"9","6.0":"10","6.5":"10½","7.0":"10¾","8.0":"11","9.0":"13","10.0":"15","12.0":"17","15.0":"19","19.0":"35","25.0":"50"};
+const EQUIP_TYPES   = ["Wheel","Drop Spindle","Supported Spindle","Lazy Kate","Niddy Noddy","Swift","Ball Winder","Other"];
+const YARN_WEIGHTS  = ["Lace","Fingering","Sport","DK","Worsted","Aran","Bulky","Super Bulky"];
+const YARN_BRANDS   = ["Malabrigo","Madelinetosh","Hedgehog Fibres","Quince & Co","Cascade","Drops","Paintbox","West Yorkshire Spinners","Rowan","Lang Yarns","Noro","Schoppel","The Fibre Co","Woolfolk","Brooklyn Tweed","Knit Picks","Other"];
+const FIBRE_PREPS   = ["Raw fleece","Washed fleece","Combed top","Carded batt","Roving","Pencil roving","Other"];
+const REPEAT_COLORS = ["#4a90d9","#6ab04c","#d4a017","#9b59b6","#e74c3c","#1abc9c","#e67e22","#34495e"];
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function createGrid(rows,cols){return Array.from({length:rows},()=>Array.from({length:cols},()=>({stitch:"empty",yarn:null})));}
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function today(){return new Date().toISOString().slice(0,10);}
 function contrastText(hex){if(!hex)return"#000";const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return(r*299+g*587+b*114)/1000>128?"#222":"#fff";}
+function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
+const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function formatFlexDate(d){if(!d)return"";const[y,m,day]=d.split("-");if(!m)return y;if(!day)return`${MONTH_NAMES[parseInt(m)-1]} ${y}`;return`${parseInt(day)} ${MONTH_NAMES[parseInt(m)-1]} ${y}`;}
+function parsePurchaseDate(d){if(!d)return{y:"",m:"",day:""};const[y="",m="",day=""]= d.split("-");return{y,m,day};};
 
 function makeSection(name="Section 1",rows=20,cols=30){
-  return {id:newId(),name,rows,cols,grid:createGrid(rows,cols),completedRows:[],currentRow:rows-1,currentCol:null,rowNotes:{},rowWidths:{},rowRepeats:{},mistakeMarkers:{},stitchMarkers:[],repeatMarkers:[]};
+  return {id:newId(),name,rows,cols,grid:createGrid(rows,cols),completedRows:[],currentRow:rows-1,currentCol:null,rowNotes:{},rowWidths:{},rowRepeats:{},mistakeMarkers:{},stitchMarkers:[],repeatMarkers:[],patternRepeats:[]};
 }
 
 const INIT_PROJECTS = [
@@ -221,7 +235,8 @@ export default function KnittingApp() {
   const rowRepeats    = activeSection?.rowRepeats   || {};
   const mistakeMarkers= activeSection?.mistakeMarkers||{};
   const stitchMarkers = new Set(activeSection?.stitchMarkers||[]);
-  const repeatMarkers = activeSection?.repeatMarkers||[];
+  const repeatMarkers   = activeSection?.repeatMarkers||[];
+  const patternRepeats  = activeSection?.patternRepeats||[];
 
   // Setters that write into the section
   const setGrid           = fn => updateActiveSection({grid: typeof fn==="function"?fn(grid):fn});
@@ -233,11 +248,15 @@ export default function KnittingApp() {
   const setRowRepeats     = fn => updateActiveSection({rowRepeats: typeof fn==="function"?fn(rowRepeats):fn});
   const setMistakeMarkers = fn => updateActiveSection({mistakeMarkers: typeof fn==="function"?fn(mistakeMarkers):fn});
   const setStitchMarkers  = fn => { const next=typeof fn==="function"?fn(stitchMarkers):fn; updateActiveSection({stitchMarkers:[...next]}); };
-  const setRepeatMarkers  = fn => updateActiveSection({repeatMarkers: typeof fn==="function"?fn(repeatMarkers):fn});
+  const setRepeatMarkers   = fn => updateActiveSection({repeatMarkers:   typeof fn==="function"?fn(repeatMarkers):fn});
+  const setPatternRepeats  = fn => updateActiveSection({patternRepeats:  typeof fn==="function"?fn(patternRepeats):fn});
 
   // ── Tool state ────────────────────────────────────────────────────────
   const [selectedStitch, setSelectedStitch] = useState("knit");
   const [selectedYarn,   setSelectedYarn]   = useState(null);
+  const [stripeYarns,   setStripeYarns]    = useState([]);
+  const [stripeDir,     setStripeDir]      = useState("row");
+  const [stitchCount,   setStitchCount]    = useState(0);
   const [markerMode, setMarkerMode]         = useState(false);
   const [zoom, setZoom]                     = useState(1);
   const [showSymbolKey, setShowSymbolKey]   = useState(true);
@@ -264,7 +283,13 @@ export default function KnittingApp() {
   // ── App mode ──────────────────────────────────────────────────────────
   const [appMode, setAppMode]     = useState(()=>{
     try{return localStorage.getItem("ww_app_mode")||"knitting";}catch{return "knitting";}
-  }); // "knitting" | "spinning"
+  }); // "knitting" | "spinning" | "library"
+  const [libraryView, setLibraryView] = useState("needles"); // "needles" | "tools" | "yarn" | "fibre"
+
+  const [needleLibrary,  setNeedleLibrary]  = useState(()=>{ try{const s=localStorage.getItem("ww_needles");   return s?JSON.parse(s):[];}catch{return [];} });
+  const [equipLibrary,   setEquipLibrary]   = useState(()=>{ try{const s=localStorage.getItem("ww_equip");    return s?JSON.parse(s):[];}catch{return [];} });
+  const [yarnLibrary,    setYarnLibrary]    = useState(()=>{ try{const s=localStorage.getItem("ww_yarn_lib"); return s?JSON.parse(s):[];}catch{return [];} });
+  const [fibreLibrary,   setFibreLibrary]   = useState(()=>{ try{const s=localStorage.getItem("ww_fibre");    return s?JSON.parse(s):[];}catch{return [];} });
 
   // ── Navigation / Modals ───────────────────────────────────────────────
   const [view, setView]           = useState("pattern");
@@ -291,8 +316,11 @@ export default function KnittingApp() {
   const [editingProject,      setEditingProject]      = useState(null);
 
   // Work log
-  const [logDate,logHours,logRowsFrom,logRowsTo,logNote]=[useState(today()),useState(""),useState(""),useState(""),useState("")];
-  const setLog={date:logDate[1],hours:logHours[1],rowsFrom:logRowsFrom[1],rowsTo:logRowsTo[1],note:logNote[1]};
+  const [logDate,     setLogDate]     = useState(today());
+  const [logHours,    setLogHours]    = useState("");
+  const [logRowsFrom, setLogRowsFrom] = useState("");
+  const [logRowsTo,   setLogRowsTo]   = useState("");
+  const [logNote,     setLogNote]     = useState("");
 
   // ── Spinning state ────────────────────────────────────────────────────
   const [spinProjects,      setSpinProjects]      = useState(()=>{
@@ -325,6 +353,10 @@ export default function KnittingApp() {
   useEffect(()=>{ try{localStorage.setItem("ww_spin_projects",     JSON.stringify(spinProjects));}catch(e){if(e.name==="QuotaExceededError")alert("Storage full — photos may not be saved. Try removing some photos or export a backup.");} }, [spinProjects]);
   useEffect(()=>{ try{localStorage.setItem("ww_active_spin_id",    activeSpinId||"");}catch{} },          [activeSpinId]);
   useEffect(()=>{ try{localStorage.setItem("ww_app_mode",          appMode);}catch{} },                   [appMode]);
+  useEffect(()=>{ try{localStorage.setItem("ww_needles",    JSON.stringify(needleLibrary)); }catch{} }, [needleLibrary]);
+  useEffect(()=>{ try{localStorage.setItem("ww_equip",     JSON.stringify(equipLibrary));  }catch{} }, [equipLibrary]);
+  useEffect(()=>{ try{localStorage.setItem("ww_yarn_lib",  JSON.stringify(yarnLibrary));   }catch{} }, [yarnLibrary]);
+  useEffect(()=>{ try{localStorage.setItem("ww_fibre",     JSON.stringify(fibreLibrary));  }catch{} }, [fibreLibrary]);
   useEffect(()=>{ try{localStorage.setItem("ww_theme",             JSON.stringify(theme));}catch{} },     [theme]);
   useEffect(()=>{ try{localStorage.setItem("ww_custom_stitches",      JSON.stringify(customStitches));}catch{} },      [customStitches]);
   useEffect(()=>{ try{localStorage.setItem("ww_stitch_overrides",     JSON.stringify(stitchOverrides));}catch{} },     [stitchOverrides]);
@@ -559,6 +591,44 @@ export default function KnittingApp() {
     setPastePreview(null);
   };
 
+  const applyYarnStripe = () => {
+    if(!selAction||stripeYarns.length===0)return;
+    pushUndo(grid);
+    setGrid(prev=>{
+      const n=prev.map(row=>row.map(c=>({...c})));
+      selAction.cells.forEach((row,ri)=>row.forEach((_,ci)=>{
+        const gr=selAction.r1+ri,gc=selAction.c1+ci;
+        if(gr>=0&&gr<n.length&&gc>=0&&gc<n[gr].length){
+          const idx=stripeDir==="row"?ri:ci;
+          n[gr][gc]={...n[gr][gc],yarn:stripeYarns[idx%stripeYarns.length]};
+        }
+      }));
+      return n;
+    });
+  };
+
+  const mergeSections = (srcId, direction) => {
+    const src=(activeProject.sections||[]).find(s=>s.id===srcId);
+    if(!src||!activeSection)return;
+    const dst=activeSection;
+    let newRows,newCols,newGrid;
+    if(direction==="right"){
+      newRows=Math.max(dst.rows,src.rows);
+      newCols=dst.cols+src.cols;
+      newGrid=createGrid(newRows,newCols);
+      dst.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{newGrid[ri][ci]={...cell};}));
+      src.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{newGrid[ri][dst.cols+ci]={...cell};}));
+    } else {
+      newRows=dst.rows+src.rows;
+      newCols=Math.max(dst.cols,src.cols);
+      newGrid=createGrid(newRows,newCols);
+      dst.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{newGrid[ri][ci]={...cell};}));
+      src.grid.forEach((row,ri)=>row.forEach((cell,ci)=>{newGrid[dst.rows+ri][ci]={...cell};}));
+    }
+    updateActiveSection({rows:newRows,cols:newCols,grid:newGrid});
+    closeModal();
+  };
+
   // ── AI Import ─────────────────────────────────────────────────────────
   const handleImport = async()=>{
     if(!importText.trim()&&!importImage)return;
@@ -635,10 +705,10 @@ export default function KnittingApp() {
 
   // ── Project helpers ───────────────────────────────────────────────────
   const addLogEntry = ()=>{
-    if(!logDate[0])return;
-    const entry={id:newId(),date:logDate[0],hours:logHours[0]||null,rowsFrom:logRowsFrom[0]||null,rowsTo:logRowsTo[0]||null,note:logNote[0]};
+    if(!logDate)return;
+    const entry={id:newId(),date:logDate,hours:logHours||null,rowsFrom:logRowsFrom||null,rowsTo:logRowsTo||null,note:logNote};
     updateProject(activeProjectId,{log:[...(activeProject.log||[]),entry]});
-    setLog.date(today());setLog.hours("");setLog.rowsFrom("");setLog.rowsTo("");setLog.note("");closeModal();
+    setLogDate(today());setLogHours("");setLogRowsFrom("");setLogRowsTo("");setLogNote("");closeModal();
   };
   const addPhoto=e=>{
     const file=e.target.files?.[0];if(!file)return;
@@ -894,6 +964,21 @@ export default function KnittingApp() {
               <button onClick={()=>{addSection(modalData.newSecName);setModalData(d=>({...d,newSecName:""}));}} style={btnPrimary}>Add</button>
             </div>
           </div>
+          {(activeProject.sections||[]).filter(s=>s.id!==activeSectionId).length>0&&(
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14,marginTop:14}}>
+              <div style={{fontSize:12,fontWeight:"bold",marginBottom:4}}>Merge into active section <span style={{color:C.muted,fontWeight:"normal"}}>({activeSection?.name})</span></div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:10}}>Appends another section's grid to the active one. This cannot be undone.</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {(activeProject.sections||[]).filter(s=>s.id!==activeSectionId).map(sec=>(
+                  <div key={sec.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.surface2,borderRadius:6,border:`1px solid ${C.border}`}}>
+                    <span style={{fontSize:13,flex:1}}>{sec.name} <span style={{fontSize:11,color:C.muted}}>({sec.rows}×{sec.cols})</span></span>
+                    <button onClick={()=>mergeSections(sec.id,"right")} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>→ Side by side</button>
+                    <button onClick={()=>mergeSections(sec.id,"bottom")} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>↓ Stack below</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Modal>
       )}
 
@@ -1248,9 +1333,24 @@ export default function KnittingApp() {
       {/* New/Edit Project */}
       {modal==="newProject"&&(
         <Modal theme={C} title={editingProject?"Edit Project":"New Project"} onClose={()=>{closeModal();setEditingProject(null);}} width={460}>
-          {[["Project name","pName","text","e.g. Cabled Beanie"],["Yarn","pYarn","text","e.g. Merino DK – Slate"],["Needle size","pNeedles","text","e.g. 4mm"]].map(([l,key,type,ph])=>(
+          {[["Project name","pName","text","e.g. Cabled Beanie"],["Yarn","pYarn","text","e.g. Merino DK – Slate"]].map(([l,key,type,ph])=>(
             <div key={key} style={{marginBottom:10}}><span style={lbl}>{l}</span><input type={type} placeholder={ph} value={modalData[key]||""} onChange={e=>setModalData(d=>({...d,[key]:e.target.value}))} style={inp}/></div>
           ))}
+          <div style={{marginBottom:10}}>
+            <span style={lbl}>Needle size</span>
+            <input placeholder="e.g. 4mm" value={modalData.pNeedles||""} onChange={e=>setModalData(d=>({...d,pNeedles:e.target.value}))} style={inp}/>
+            {needleLibrary.length>0&&(
+              <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:6}}>
+                <span style={{fontSize:10,color:C.muted,alignSelf:"center"}}>From library:</span>
+                {needleLibrary.sort((a,b)=>parseFloat(a.sizeMm)-parseFloat(b.sizeMm)).map(n=>(
+                  <button key={n.id} onClick={()=>setModalData(d=>({...d,pNeedles:`${n.sizeMm}mm${n.sizeUS?` (US ${n.sizeUS})`:""} ${n.type}${[n.brand,n.series].filter(Boolean).length?` · ${[n.brand,n.series].filter(Boolean).join(" ")}`:""}`.trim()}))}
+                    style={{fontSize:10,padding:"2px 8px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontFamily:"inherit",color:C.text,whiteSpace:"nowrap"}}>
+                    {n.sizeMm}mm {n.type.split(" ")[0]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div><span style={lbl}>Status</span><select value={modalData.pStatus||"Active"} onChange={e=>setModalData(d=>({...d,pStatus:e.target.value}))} style={inp}>{allProjectStatuses.map(s=><option key={s}>{s}</option>)}</select></div>
             <div>
@@ -1318,12 +1418,12 @@ export default function KnittingApp() {
       {modal==="log"&&(
         <Modal theme={C} title="Log a Work Session" onClose={closeModal} width={420}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            <div><span style={lbl}>Date</span><input type="date" value={logDate[0]} onChange={e=>setLog.date(e.target.value)} style={inp}/></div>
-            <div><span style={lbl}>Hours</span><input type="number" step="0.5" min="0" value={logHours[0]} onChange={e=>setLog.hours(e.target.value)} style={inp}/></div>
-            <div><span style={lbl}>Rows from</span><input type="number" min="1" value={logRowsFrom[0]} onChange={e=>setLog.rowsFrom(e.target.value)} style={inp}/></div>
-            <div><span style={lbl}>Rows to</span><input type="number" min="1" value={logRowsTo[0]} onChange={e=>setLog.rowsTo(e.target.value)} style={inp}/></div>
+            <div><span style={lbl}>Date</span><input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)} style={inp}/></div>
+            <div><span style={lbl}>Hours</span><input type="number" step="0.5" min="0" value={logHours} onChange={e=>setLogHours(e.target.value)} style={inp}/></div>
+            <div><span style={lbl}>Rows from</span><input type="number" min="1" value={logRowsFrom} onChange={e=>setLogRowsFrom(e.target.value)} style={inp}/></div>
+            <div><span style={lbl}>Rows to</span><input type="number" min="1" value={logRowsTo} onChange={e=>setLogRowsTo(e.target.value)} style={inp}/></div>
           </div>
-          <div style={{marginBottom:12}}><span style={lbl}>Notes</span><input value={logNote[0]} onChange={e=>setLog.note(e.target.value)} style={inp}/></div>
+          <div style={{marginBottom:12}}><span style={lbl}>Notes</span><input value={logNote} onChange={e=>setLogNote(e.target.value)} style={inp}/></div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><button onClick={closeModal} style={btnSecondary}>Cancel</button><button onClick={addLogEntry} style={btnPrimary}>Save</button></div>
         </Modal>
       )}
@@ -1387,6 +1487,328 @@ export default function KnittingApp() {
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button onClick={closeModal} style={btnSecondary}>Cancel</button>
             <button onClick={addSpinLogEntry} style={btnPrimary}>Save</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add / Edit Needle */}
+      {modal==="newNeedle"&&(
+        <Modal theme={C} title={modalData.editing?"Edit Needle":"Add Needle"} onClose={closeModal} width={440}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Type</span>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {NEEDLE_TYPES.map(t=>(
+                  <button key={t} onClick={()=>setModalData(d=>({...d,nType:t}))}
+                    style={{padding:"4px 12px",borderRadius:12,border:(modalData.nType||"Circular")===t?`2px solid ${C.text}`:`1px solid ${C.border}`,background:(modalData.nType||"Circular")===t?C.surface2:C.surface,cursor:"pointer",fontSize:11,fontFamily:"inherit",color:C.text}}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div><span style={lbl}>Size (mm)</span>
+              <input type="number" step="0.25" min="0.5" placeholder="e.g. 4.0" value={modalData.nMm||""} onChange={e=>setModalData(d=>({...d,nMm:e.target.value,nUS:MM_TO_US[e.target.value]||d.nUS||""}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>US Size (auto-fills)</span>
+              <input placeholder="e.g. 6" value={modalData.nUS||""} onChange={e=>setModalData(d=>({...d,nUS:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Length (cm)</span>
+              <input type="number" placeholder="e.g. 80" value={modalData.nLength||""} onChange={e=>setModalData(d=>({...d,nLength:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Material</span>
+              <input placeholder="e.g. Steel, Bamboo, Wood" value={modalData.nMaterial||""} onChange={e=>setModalData(d=>({...d,nMaterial:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Brand</span>
+              <select value={modalData.nBrand||""} onChange={e=>setModalData(d=>({...d,nBrand:e.target.value,nBrandCustom:""}))} style={inp}>
+                <option value="">— select brand —</option>
+                {NEEDLE_BRANDS.map(b=><option key={b} value={b}>{b}</option>)}
+              </select>
+              {modalData.nBrand==="Other"&&(
+                <input placeholder="Brand name" value={modalData.nBrandCustom||""} onChange={e=>setModalData(d=>({...d,nBrandCustom:e.target.value}))} style={{...inp,marginTop:4}}/>
+              )}
+            </div>
+            <div><span style={lbl}>Series / Line</span>
+              <input placeholder="e.g. Turbo, Red Lace, Symfonie" value={modalData.nSeries||""} onChange={e=>setModalData(d=>({...d,nSeries:e.target.value}))} style={inp}/>
+            </div>
+            <div style={{gridColumn:"1/-1"}}>
+              <span style={lbl}>Date purchased <span style={{fontWeight:"normal",color:C.muted}}>(optional — fill in as much or as little as you know)</span></span>
+              <div style={{display:"flex",gap:6}}>
+                <input placeholder="Year e.g. 2023" value={modalData.nPdY||""} onChange={e=>setModalData(d=>({...d,nPdY:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>
+                <select value={modalData.nPdM||""} onChange={e=>setModalData(d=>({...d,nPdM:e.target.value,nPdD:""}))} style={{...inp,flex:3,marginBottom:0}}>
+                  <option value="">— Month —</option>
+                  {MONTH_NAMES.map((mn,i)=><option key={i+1} value={String(i+1).padStart(2,"0")}>{mn}</option>)}
+                </select>
+                {modalData.nPdM&&(
+                  <input placeholder="Day" value={modalData.nPdD||""} onChange={e=>setModalData(d=>({...d,nPdD:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>
+                )}
+              </div>
+            </div>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Notes</span>
+              <input placeholder="e.g. condition, where purchased" value={modalData.nNotes||""} onChange={e=>setModalData(d=>({...d,nNotes:e.target.value}))} style={inp}/>
+            </div>
+          </div>
+          {/* Interchangeable cord inventory */}
+          {(modalData.nType||"Circular")==="Interchangeable Tips"&&(
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
+              <div style={{fontSize:12,fontWeight:"bold",color:C.text,marginBottom:8}}>Cord lengths</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+                {(modalData.nCords||[]).map((cord,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{flex:1}}><span style={lbl}>Length (cm)</span>
+                      <input type="number" placeholder="e.g. 80" value={cord.length||""} onChange={e=>setModalData(d=>{const c=[...(d.nCords||[])];c[i]={...c[i],length:e.target.value};return{...d,nCords:c};})} style={{...inp,marginBottom:0}}/>
+                    </div>
+                    <div style={{flex:1}}><span style={lbl}>Qty</span>
+                      <input type="number" min="1" placeholder="1" value={cord.qty||""} onChange={e=>setModalData(d=>{const c=[...(d.nCords||[])];c[i]={...c[i],qty:e.target.value};return{...d,nCords:c};})} style={{...inp,marginBottom:0}}/>
+                    </div>
+                    <button onClick={()=>setModalData(d=>({...d,nCords:(d.nCords||[]).filter((_,j)=>j!==i)}))} style={{...btnDanger,fontSize:11,padding:"4px 8px",alignSelf:"flex-end",marginBottom:1}}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>setModalData(d=>({...d,nCords:[...(d.nCords||[]),{length:"",qty:"1"}]}))} style={{...btnSecondary,fontSize:11,padding:"4px 12px"}}>+ Add cord length</button>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={closeModal} style={btnSecondary}>Cancel</button>
+            <button onClick={()=>{
+              if(!modalData.nMm)return;
+              const brand=modalData.nBrand==="Other"?(modalData.nBrandCustom||"Other"):modalData.nBrand||"";
+              const pdParts=[modalData.nPdY,modalData.nPdM&&modalData.nPdM.padStart(2,"0"),modalData.nPdD&&String(parseInt(modalData.nPdD)).padStart(2,"0")].filter(Boolean);
+              const purchaseDate=modalData.nPdY?pdParts.join("-"):"";
+              const n={id:modalData.editing||newId(),type:modalData.nType||"Circular",sizeMm:modalData.nMm,sizeUS:modalData.nUS||"",length:modalData.nLength||"",material:modalData.nMaterial||"",brand,series:modalData.nSeries||"",purchaseDate,notes:modalData.nNotes||"",cords:(modalData.nType||"Circular")==="Interchangeable Tips"?(modalData.nCords||[]).filter(c=>c.length):[]};
+              if(modalData.editing)setNeedleLibrary(prev=>prev.map(x=>x.id===modalData.editing?n:x));
+              else setNeedleLibrary(prev=>[...prev,n]);
+              closeModal();
+            }} style={btnPrimary}>{modalData.editing?"Save changes":"Add needle"}</button>
+          </div>
+        </Modal>
+      )}
+
+      {modal==="addPatternRepeat"&&(
+        <Modal theme={C} title="Add Pattern Repeat Counter" onClose={closeModal} width={380}>
+          <div style={{marginBottom:10}}>
+            <span style={lbl}>Name</span>
+            <input placeholder="e.g. Cable Pattern, K5 P5 repeat" value={modalData.prName||""} onChange={e=>setModalData(d=>({...d,prName:e.target.value}))} style={inp} autoFocus/>
+          </div>
+          <div style={{marginBottom:10}}>
+            <span style={lbl}>Rows per repeat <span style={{fontWeight:"normal",color:C.muted}}>(optional — lets you track which row you're on within a repeat)</span></span>
+            <input type="number" min="1" placeholder="e.g. 4" value={modalData.prRows||""} onChange={e=>setModalData(d=>({...d,prRows:e.target.value}))} style={inp}/>
+          </div>
+          <div style={{marginBottom:16}}>
+            <span style={lbl}>Target repeats <span style={{fontWeight:"normal",color:C.muted}}>(optional — leave blank to count freely)</span></span>
+            <input type="number" min="1" placeholder="e.g. 12" value={modalData.prTotal||""} onChange={e=>setModalData(d=>({...d,prTotal:e.target.value}))} style={inp}/>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={closeModal} style={btnSecondary}>Cancel</button>
+            <button onClick={()=>{
+              if(!modalData.prName?.trim())return;
+              const rpr=modalData.prRows?Math.max(1,parseInt(modalData.prRows)):null;
+              const counter={id:newId(),name:modalData.prName.trim(),rowsPerRepeat:rpr,total:modalData.prTotal?parseInt(modalData.prTotal):0,done:0,currentRow:1};
+              setPatternRepeats(prev=>[...prev,counter]);
+              closeModal();
+            }} style={btnPrimary}>Add counter</button>
+          </div>
+        </Modal>
+      )}
+
+      {modal==="newTool"&&(
+        <Modal theme={C} title={modalData.editing?"Edit Tool":"Add Tool"} onClose={closeModal} width={440}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Type</span>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {EQUIP_TYPES.map(t=>(
+                  <button key={t} onClick={()=>setModalData(d=>({...d,eType:t}))}
+                    style={{padding:"4px 12px",borderRadius:12,border:(modalData.eType||"Wheel")===t?`2px solid ${C.text}`:`1px solid ${C.border}`,background:(modalData.eType||"Wheel")===t?C.surface2:C.surface,cursor:"pointer",fontSize:11,fontFamily:"inherit",color:C.text}}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div><span style={lbl}>Brand</span>
+              <input placeholder="e.g. Schacht, Ashford" value={modalData.eBrand||""} onChange={e=>setModalData(d=>({...d,eBrand:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Model</span>
+              <input placeholder="e.g. Matchless, Kiwi 3" value={modalData.eModel||""} onChange={e=>setModalData(d=>({...d,eModel:e.target.value}))} style={inp}/>
+            </div>
+            {(modalData.eType||"Wheel")==="Wheel"&&(
+              <div style={{gridColumn:"1/-1"}}><span style={lbl}>Ratios</span>
+                <input placeholder="e.g. 6:1, 9:1, 13:1" value={modalData.eRatios||""} onChange={e=>setModalData(d=>({...d,eRatios:e.target.value}))} style={inp}/>
+              </div>
+            )}
+            {["Drop Spindle","Supported Spindle"].includes(modalData.eType||"Wheel")&&(<>
+              <div><span style={lbl}>Whorl / Hook sizes</span>
+                <input placeholder="e.g. 8g, 12g hooks" value={modalData.eHookSizes||""} onChange={e=>setModalData(d=>({...d,eHookSizes:e.target.value}))} style={inp}/>
+              </div>
+              <div><span style={lbl}>Weight (g)</span>
+                <input type="number" placeholder="e.g. 20" value={modalData.eWeightG||""} onChange={e=>setModalData(d=>({...d,eWeightG:e.target.value}))} style={inp}/>
+              </div>
+            </>)}
+            <div style={{gridColumn:"1/-1"}}>
+              <span style={lbl}>Date purchased <span style={{fontWeight:"normal",color:C.muted}}>(optional)</span></span>
+              <div style={{display:"flex",gap:6}}>
+                <input placeholder="Year e.g. 2023" value={modalData.ePdY||""} onChange={e=>setModalData(d=>({...d,ePdY:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>
+                <select value={modalData.ePdM||""} onChange={e=>setModalData(d=>({...d,ePdM:e.target.value,ePdD:""}))} style={{...inp,flex:3,marginBottom:0}}>
+                  <option value="">— Month —</option>
+                  {MONTH_NAMES.map((mn,i)=><option key={i+1} value={String(i+1).padStart(2,"0")}>{mn}</option>)}
+                </select>
+                {modalData.ePdM&&<input placeholder="Day" value={modalData.ePdD||""} onChange={e=>setModalData(d=>({...d,ePdD:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>}
+              </div>
+            </div>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Notes</span>
+              <input placeholder="e.g. condition, source, accessories" value={modalData.eNotes||""} onChange={e=>setModalData(d=>({...d,eNotes:e.target.value}))} style={inp}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={closeModal} style={btnSecondary}>Cancel</button>
+            <button onClick={()=>{
+              if(!modalData.eBrand?.trim()&&!modalData.eModel?.trim())return;
+              const pdParts=[modalData.ePdY,modalData.ePdM&&modalData.ePdM.padStart(2,"0"),modalData.ePdD&&String(parseInt(modalData.ePdD)).padStart(2,"0")].filter(Boolean);
+              const purchaseDate=modalData.ePdY?pdParts.join("-"):"";
+              const item={id:modalData.editing||newId(),type:modalData.eType||"Wheel",brand:modalData.eBrand||"",model:modalData.eModel||"",ratios:modalData.eRatios||"",hookSizes:modalData.eHookSizes||"",weightG:modalData.eWeightG||"",purchaseDate,notes:modalData.eNotes||""};
+              if(modalData.editing)setEquipLibrary(prev=>prev.map(x=>x.id===modalData.editing?item:x));
+              else setEquipLibrary(prev=>[...prev,item]);
+              closeModal();
+            }} style={btnPrimary}>{modalData.editing?"Save changes":"Add tool"}</button>
+          </div>
+        </Modal>
+      )}
+
+      {modal==="newYarnEntry"&&(
+        <Modal theme={C} title={modalData.editing?"Edit Yarn":"Add Yarn"} onClose={closeModal} width={480}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div><span style={lbl}>Brand</span>
+              <select value={modalData.yBrand||""} onChange={e=>setModalData(d=>({...d,yBrand:e.target.value,yBrandCustom:""}))} style={inp}>
+                <option value="">— select brand —</option>
+                {YARN_BRANDS.map(b=><option key={b} value={b}>{b}</option>)}
+              </select>
+              {modalData.yBrand==="Other"&&(
+                <input placeholder="Brand name" value={modalData.yBrandCustom||""} onChange={e=>setModalData(d=>({...d,yBrandCustom:e.target.value}))} style={{...inp,marginTop:4}}/>
+              )}
+            </div>
+            <div><span style={lbl}>Colourway</span>
+              <input placeholder="e.g. Peacock, Dusty Rose" value={modalData.yColourway||""} onChange={e=>setModalData(d=>({...d,yColourway:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Weight</span>
+              <select value={modalData.yWeight||""} onChange={e=>setModalData(d=>({...d,yWeight:e.target.value}))} style={inp}>
+                <option value="">— select weight —</option>
+                {YARN_WEIGHTS.map(w=><option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+            <div><span style={lbl}>Fibre content</span>
+              <input placeholder="e.g. 80% Merino, 20% Silk" value={modalData.yFibre||""} onChange={e=>setModalData(d=>({...d,yFibre:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Yardage / skein</span>
+              <input type="number" placeholder="e.g. 400" value={modalData.yYardage||""} onChange={e=>setModalData(d=>({...d,yYardage:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Skein weight (g)</span>
+              <input type="number" placeholder="e.g. 100" value={modalData.ySkeinWeight||""} onChange={e=>setModalData(d=>({...d,ySkeinWeight:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Skeins owned</span>
+              <input type="number" step="0.5" placeholder="e.g. 3" value={modalData.ySkeins||""} onChange={e=>setModalData(d=>({...d,ySkeins:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Colour swatch</span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="color" value={modalData.yColor||"#d4c5b0"} onChange={e=>setModalData(d=>({...d,yColor:e.target.value}))} style={{width:40,height:36,border:"none",background:"none",cursor:"pointer",padding:0}}/>
+                <input value={modalData.yColor||"#d4c5b0"} onChange={e=>setModalData(d=>({...d,yColor:e.target.value}))} style={{...inp,flex:1,marginBottom:0}}/>
+              </div>
+            </div>
+            <div><span style={lbl}>Shop / Source</span>
+              <input placeholder="e.g. Woolly Mammoth, Etsy" value={modalData.yShop||""} onChange={e=>setModalData(d=>({...d,yShop:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Price paid</span>
+              <input placeholder="e.g. £24.00" value={modalData.yPrice||""} onChange={e=>setModalData(d=>({...d,yPrice:e.target.value}))} style={inp}/>
+            </div>
+            <div style={{gridColumn:"1/-1"}}>
+              <span style={lbl}>Date purchased <span style={{fontWeight:"normal",color:C.muted}}>(optional)</span></span>
+              <div style={{display:"flex",gap:6}}>
+                <input placeholder="Year e.g. 2024" value={modalData.yPdY||""} onChange={e=>setModalData(d=>({...d,yPdY:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>
+                <select value={modalData.yPdM||""} onChange={e=>setModalData(d=>({...d,yPdM:e.target.value,yPdD:""}))} style={{...inp,flex:3,marginBottom:0}}>
+                  <option value="">— Month —</option>
+                  {MONTH_NAMES.map((mn,i)=><option key={i+1} value={String(i+1).padStart(2,"0")}>{mn}</option>)}
+                </select>
+                {modalData.yPdM&&<input placeholder="Day" value={modalData.yPdD||""} onChange={e=>setModalData(d=>({...d,yPdD:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>}
+              </div>
+            </div>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Notes</span>
+              <input placeholder="e.g. dye lot, where to buy more" value={modalData.yNotes||""} onChange={e=>setModalData(d=>({...d,yNotes:e.target.value}))} style={inp}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={closeModal} style={btnSecondary}>Cancel</button>
+            <button onClick={()=>{
+              if(!modalData.yBrand&&!modalData.yColourway)return;
+              const brand=modalData.yBrand==="Other"?(modalData.yBrandCustom||"Other"):modalData.yBrand||"";
+              const pdParts=[modalData.yPdY,modalData.yPdM&&modalData.yPdM.padStart(2,"0"),modalData.yPdD&&String(parseInt(modalData.yPdD)).padStart(2,"0")].filter(Boolean);
+              const purchaseDate=modalData.yPdY?pdParts.join("-"):"";
+              const item={id:modalData.editing||newId(),brand,colourway:modalData.yColourway||"",weight:modalData.yWeight||"",fibre:modalData.yFibre||"",yardage:modalData.yYardage||"",skeinWeight:modalData.ySkeinWeight||"",skeins:modalData.ySkeins||"",color:modalData.yColor||"#d4c5b0",purchaseDate,shop:modalData.yShop||"",price:modalData.yPrice||"",notes:modalData.yNotes||""};
+              if(modalData.editing)setYarnLibrary(prev=>prev.map(x=>x.id===modalData.editing?item:x));
+              else setYarnLibrary(prev=>[...prev,item]);
+              closeModal();
+            }} style={btnPrimary}>{modalData.editing?"Save changes":"Add yarn"}</button>
+          </div>
+        </Modal>
+      )}
+
+      {modal==="newFibre"&&(
+        <Modal theme={C} title={modalData.editing?"Edit Fibre":"Add Fibre"} onClose={closeModal} width={440}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div><span style={lbl}>Fibre type</span>
+              <select value={modalData.fType||""} onChange={e=>setModalData(d=>({...d,fType:e.target.value}))} style={inp}>
+                <option value="">— select type —</option>
+                {FIBER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div><span style={lbl}>Breed / Source</span>
+              <input placeholder="e.g. Bluefaced Leicester" value={modalData.fBreed||""} onChange={e=>setModalData(d=>({...d,fBreed:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Dyer / Indie dyer</span>
+              <input placeholder="e.g. Fleece Artist" value={modalData.fDyer||""} onChange={e=>setModalData(d=>({...d,fDyer:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Colourway</span>
+              <input placeholder="e.g. Forest Floor" value={modalData.fColourway||""} onChange={e=>setModalData(d=>({...d,fColourway:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Weight owned (g)</span>
+              <input type="number" placeholder="e.g. 200" value={modalData.fWeightG||""} onChange={e=>setModalData(d=>({...d,fWeightG:e.target.value}))} style={inp}/>
+            </div>
+            <div><span style={lbl}>Prep</span>
+              <select value={modalData.fPrep||""} onChange={e=>setModalData(d=>({...d,fPrep:e.target.value}))} style={inp}>
+                <option value="">— select prep —</option>
+                {FIBRE_PREPS.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Colour swatch</span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="color" value={modalData.fColor||"#d4c5b0"} onChange={e=>setModalData(d=>({...d,fColor:e.target.value}))} style={{width:40,height:36,border:"none",background:"none",cursor:"pointer",padding:0}}/>
+                <input value={modalData.fColor||"#d4c5b0"} onChange={e=>setModalData(d=>({...d,fColor:e.target.value}))} style={{...inp,flex:1,marginBottom:0}}/>
+              </div>
+            </div>
+            <div><span style={lbl}>Shop / Source</span>
+              <input placeholder="e.g. Local farm, Ravelry" value={modalData.fShop||""} onChange={e=>setModalData(d=>({...d,fShop:e.target.value}))} style={inp}/>
+            </div>
+            <div style={{gridColumn:"1/-1"}}>
+              <span style={lbl}>Date purchased <span style={{fontWeight:"normal",color:C.muted}}>(optional)</span></span>
+              <div style={{display:"flex",gap:6}}>
+                <input placeholder="Year e.g. 2024" value={modalData.fPdY||""} onChange={e=>setModalData(d=>({...d,fPdY:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>
+                <select value={modalData.fPdM||""} onChange={e=>setModalData(d=>({...d,fPdM:e.target.value,fPdD:""}))} style={{...inp,flex:3,marginBottom:0}}>
+                  <option value="">— Month —</option>
+                  {MONTH_NAMES.map((mn,i)=><option key={i+1} value={String(i+1).padStart(2,"0")}>{mn}</option>)}
+                </select>
+                {modalData.fPdM&&<input placeholder="Day" value={modalData.fPdD||""} onChange={e=>setModalData(d=>({...d,fPdD:e.target.value}))} style={{...inp,flex:2,marginBottom:0}}/>}
+              </div>
+            </div>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Notes</span>
+              <input placeholder="e.g. freshly washed, spinnable condition" value={modalData.fNotes||""} onChange={e=>setModalData(d=>({...d,fNotes:e.target.value}))} style={inp}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={closeModal} style={btnSecondary}>Cancel</button>
+            <button onClick={()=>{
+              if(!modalData.fType&&!modalData.fColourway)return;
+              const pdParts=[modalData.fPdY,modalData.fPdM&&modalData.fPdM.padStart(2,"0"),modalData.fPdD&&String(parseInt(modalData.fPdD)).padStart(2,"0")].filter(Boolean);
+              const purchaseDate=modalData.fPdY?pdParts.join("-"):"";
+              const item={id:modalData.editing||newId(),type:modalData.fType||"",breed:modalData.fBreed||"",dyer:modalData.fDyer||"",colourway:modalData.fColourway||"",weightG:modalData.fWeightG||"",prep:modalData.fPrep||"",color:modalData.fColor||"#d4c5b0",purchaseDate,shop:modalData.fShop||"",notes:modalData.fNotes||""};
+              if(modalData.editing)setFibreLibrary(prev=>prev.map(x=>x.id===modalData.editing?item:x));
+              else setFibreLibrary(prev=>[...prev,item]);
+              closeModal();
+            }} style={btnPrimary}>{modalData.editing?"Save changes":"Add fibre"}</button>
           </div>
         </Modal>
       )}
@@ -1483,13 +1905,18 @@ export default function KnittingApp() {
         <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
           {/* Mode toggle */}
           <div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.1)",borderRadius:20,padding:3,marginRight:6}}>
-            {[["knitting","🧶 Knitting"],["spinning","🪡 Spinning"]].map(([m,label])=>(
+            {[["knitting","🧶 Knitting"],["spinning","🪡 Spinning"],["library","📚 Library"]].map(([m,label])=>(
               <button key={m} onClick={()=>setAppMode(m)} style={{padding:"5px 14px",borderRadius:16,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:"bold",background:appMode===m?C.accent:"transparent",color:appMode===m?contrastText(C.accent):"rgba(255,255,255,0.65)",transition:"all 0.2s"}}>{label}</button>
             ))}
           </div>
           {appMode==="knitting"&&["pattern","projects","log","notes"].map(v=>(
             <button key={v} onClick={()=>setView(v)} style={{...btnTab(view===v),color:view===v?contrastText(C.accent):"rgba(255,255,255,0.6)"}}>
               {v==="log"?"Work Log":v.charAt(0).toUpperCase()+v.slice(1)}
+            </button>
+          ))}
+          {appMode==="library"&&[["needles","📌 Needles"],["tools","🛠 Tools"],["yarn","🧶 Yarn"],["fibre","🌿 Fibre"]].map(([ev,label])=>(
+            <button key={ev} onClick={()=>setLibraryView(ev)} style={{...btnTab(libraryView===ev),color:libraryView===ev?contrastText(C.accent):"rgba(255,255,255,0.6)"}}>
+              {label}
             </button>
           ))}
           <button onClick={()=>openModal("theme")} style={{...btnSecondary,marginLeft:8,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>🎨 Theme</button>
@@ -1575,12 +2002,16 @@ export default function KnittingApp() {
                 )}
                 {repeatMarkers.length>0&&(
                   <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`,display:"flex",flexWrap:"wrap",gap:8}}>
-                    {repeatMarkers.map(m=>(
-                      <div key={m.id} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.muted,background:C.surface2,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.border}`}}>
-                        ⌷ {m.label}
-                        <button onClick={()=>setRepeatMarkers(p=>p.filter(x=>x.id!==m.id))} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,padding:0}}>✕</button>
-                      </div>
-                    ))}
+                    {repeatMarkers.map((m,mi)=>{
+                      const rc=REPEAT_COLORS[mi%REPEAT_COLORS.length];
+                      return(
+                        <div key={m.id} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.text,background:hexToRgba(rc,0.1),padding:"3px 10px 3px 8px",borderRadius:4,border:`1px solid ${C.border}`,borderLeft:`3px solid ${rc}`}}>
+                          <span style={{color:rc,fontWeight:"bold",fontSize:10}}>⌷</span> {m.label}
+                          <span style={{fontSize:10,color:C.muted}}>R{m.rStart+1}–{m.rEnd+1} C{m.cStart+1}–{m.cEnd+1}</span>
+                          <button onClick={()=>setRepeatMarkers(p=>p.filter(x=>x.id!==m.id))} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,padding:0,lineHeight:1}}>✕</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1632,6 +2063,15 @@ export default function KnittingApp() {
                 <button onClick={()=>openModal("export",{exportContext:"knitting-project"})} style={btnSecondary}>⬇ Export</button>
                 <button onClick={()=>setShowSymbolKey(v=>!v)} style={btnSecondary}>{showSymbolKey?"Hide":"Show"} Key</button>
                 <button onClick={clearGrid} style={{...btnSecondary,color:C.muted}}>Clear</button>
+                <div style={{display:"flex",alignItems:"center",gap:0,border:`1.5px solid ${stitchCount>0?C.accent:C.border}`,borderRadius:8,overflow:"hidden",background:stitchCount>0?C.surface2:C.surface}}>
+                  <button onClick={()=>setStitchCount(c=>Math.max(0,c-1))} title="−1" style={{width:28,height:36,border:"none",background:"transparent",cursor:"pointer",fontSize:16,color:C.muted,fontFamily:"inherit",borderRight:`1px solid ${C.border}`}}>−</button>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:38,lineHeight:1.1,padding:"2px 4px"}}>
+                    <span style={{fontSize:16,fontWeight:"bold",color:stitchCount>0?C.accent:C.muted}}>{stitchCount}</span>
+                    <span style={{fontSize:7,color:C.muted,letterSpacing:0.5}}>COUNT</span>
+                  </div>
+                  <button onClick={()=>setStitchCount(c=>c+1)} title="+1" style={{width:28,height:36,border:"none",background:"transparent",cursor:"pointer",fontSize:16,color:C.text,fontFamily:"inherit",borderLeft:`1px solid ${C.border}`}}>+</button>
+                  <button onClick={()=>setStitchCount(0)} title="Reset to 0" style={{width:24,height:36,border:"none",background:"transparent",cursor:"pointer",fontSize:10,color:C.muted,fontFamily:"inherit",borderLeft:`1px solid ${C.border}`,padding:0}}>↺</button>
+                </div>
               </div>
             </div>
 
@@ -1652,6 +2092,31 @@ export default function KnittingApp() {
                 ))}
                 {selectedYarn&&<span style={{fontSize:11,color:C.muted}}>▶ <strong style={{color:C.text}}>{yarnPalette.find(y=>y.id===selectedYarn)?.name}</strong></span>}
               </div>
+              {/* Multi-stripe — shown when a selection is active */}
+              {selAction&&yarnPalette.length>0&&(
+                <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:8}}>
+                  <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:6}}>STRIPE SELECTION</div>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
+                    {yarnPalette.map(y=>{
+                      const on=stripeYarns.includes(y.id);
+                      return(
+                        <button key={y.id} onClick={()=>setStripeYarns(prev=>on?prev.filter(id=>id!==y.id):[...prev,y.id])}
+                          style={{display:"flex",alignItems:"center",gap:4,padding:"2px 7px",borderRadius:12,cursor:"pointer",border:on?`2px solid ${C.text}`:`1px solid ${C.border}`,background:on?C.surface2:C.surface,fontSize:11,color:C.text,fontFamily:"inherit"}}>
+                          <div style={{width:12,height:12,borderRadius:"50%",background:y.color,flexShrink:0}}/>
+                          {y.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {stripeYarns.length>0&&(
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <button onClick={()=>setStripeDir("row")} style={{...btnSecondary,fontSize:10,padding:"2px 8px",border:stripeDir==="row"?`1.5px solid ${C.text}`:`1px solid ${C.border}`}}>↔ By row</button>
+                      <button onClick={()=>setStripeDir("col")} style={{...btnSecondary,fontSize:10,padding:"2px 8px",border:stripeDir==="col"?`1.5px solid ${C.text}`:`1px solid ${C.border}`}}>↕ By column</button>
+                      <button onClick={applyYarnStripe} style={{...btnPrimary,fontSize:10,padding:"2px 10px",marginLeft:"auto"}}>Apply stripe</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* ── Stitch palette (close to grid) ── */}
@@ -1714,6 +2179,75 @@ export default function KnittingApp() {
                   {selectedStitch&&<div style={{marginTop:3,fontSize:10,color:C.muted}}>▶ <strong style={{color:C.text}}>{getStitch(selectedStitch).label}</strong>{getStitch(selectedStitch).desc?` — ${getStitch(selectedStitch).desc}`:""}</div>}
                 </>
               )}
+            </div>
+
+            {/* ── Pattern Repeat Counters ── */}
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:patternRepeats.length?8:0}}>
+                <span style={{fontSize:10,color:C.muted,letterSpacing:1,fontWeight:600}}>PATTERN REPEATS</span>
+                <button onClick={()=>openModal("addPatternRepeat",{})} style={{...btnSecondary,fontSize:10,padding:"1px 8px"}}>+ Add</button>
+              </div>
+              {patternRepeats.length===0&&(
+                <div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Add a counter to track repeats of a stitch pattern.</div>
+              )}
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {patternRepeats.map((pr,pri)=>{
+                  const done=pr.done||0;
+                  const rpr=pr.rowsPerRepeat||null;
+                  const curR=pr.currentRow||1;
+                  const total=pr.total||0;
+                  const isComplete=total>0&&done>=total;
+                  const advanceRow=()=>setPatternRepeats(prev=>prev.map(x=>{
+                    if(x.id!==pr.id)return x;
+                    if(rpr&&curR<rpr)return{...x,currentRow:curR+1};
+                    return{...x,done:done+1,currentRow:1};
+                  }));
+                  const backRow=()=>setPatternRepeats(prev=>prev.map(x=>{
+                    if(x.id!==pr.id)return x;
+                    if(rpr&&curR>1)return{...x,currentRow:curR-1};
+                    if(done>0)return{...x,done:done-1,currentRow:rpr||1};
+                    return x;
+                  }));
+                  return(
+                    <div key={pr.id} style={{borderTop:pri>0?`1px solid ${C.border}`:"none",paddingTop:pri>0?8:0}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:12,fontWeight:"bold",color:isComplete?C.green:C.text}}>{pr.name}{isComplete?" ✓":""}</span>
+                        <div style={{display:"flex",gap:4}}>
+                          <button onClick={()=>setPatternRepeats(prev=>prev.map(x=>x.id===pr.id?{...x,done:0,currentRow:1}:x))} title="Reset" style={{...btnSecondary,fontSize:10,padding:"1px 6px"}}>↺</button>
+                          <button onClick={()=>setPatternRepeats(prev=>prev.filter(x=>x.id!==pr.id))} title="Remove" style={{...btnDanger,fontSize:10,padding:"1px 6px"}}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        {/* Row-within-repeat tracker */}
+                        {rpr&&(
+                          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                            <span style={{fontSize:8,color:C.muted,letterSpacing:0.5}}>ROW IN REPEAT</span>
+                            <div style={{display:"flex",alignItems:"center",border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",background:C.surface2}}>
+                              <button onClick={backRow} style={{width:24,height:28,border:"none",background:"transparent",cursor:"pointer",fontSize:13,color:C.muted,fontFamily:"inherit"}}>−</button>
+                              <span style={{fontSize:13,fontWeight:"bold",color:C.text,minWidth:32,textAlign:"center"}}>{curR}<span style={{fontSize:8,color:C.muted}}>/{rpr}</span></span>
+                              <button onClick={advanceRow} style={{width:24,height:28,border:"none",background:"transparent",cursor:"pointer",fontSize:13,color:C.accent,fontFamily:"inherit",borderLeft:`1px solid ${C.border}`}}>+</button>
+                            </div>
+                          </div>
+                        )}
+                        {/* Complete repeats counter */}
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                          <span style={{fontSize:8,color:C.muted,letterSpacing:0.5}}>REPEATS DONE</span>
+                          <div style={{display:"flex",alignItems:"center",border:`1.5px solid ${isComplete?C.green:C.accent}`,borderRadius:6,overflow:"hidden",background:isComplete?hexToRgba(C.green,0.08):C.surface2}}>
+                            <button onClick={()=>setPatternRepeats(prev=>prev.map(x=>x.id===pr.id?{...x,done:Math.max(0,done-1),currentRow:1}:x))} style={{width:28,height:32,border:"none",background:"transparent",cursor:"pointer",fontSize:16,color:isComplete?C.green:C.accent,fontFamily:"inherit"}}>−</button>
+                            <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:total>0?44:32,padding:"1px 4px",lineHeight:1.1}}>
+                              <span style={{fontSize:17,fontWeight:"bold",color:isComplete?C.green:C.accent}}>{done}</span>
+                              {total>0&&<span style={{fontSize:8,color:C.muted}}>of {total}</span>}
+                            </div>
+                            <button onClick={()=>rpr?advanceRow():setPatternRepeats(prev=>prev.map(x=>x.id===pr.id?{...x,done:done+1}:x))} style={{width:28,height:32,border:"none",background:"transparent",cursor:"pointer",fontSize:16,color:isComplete?C.green:C.accent,fontFamily:"inherit",borderLeft:`1px solid ${C.border}`}}>+</button>
+                          </div>
+                        </div>
+                        {rpr&&<span style={{fontSize:10,color:C.muted}}>{rpr} rows / repeat</span>}
+                        {total>0&&<span style={{fontSize:10,color:C.muted}}>{total} repeats target</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* ── Grid ── */}
@@ -1804,11 +2338,19 @@ export default function KnittingApp() {
                             const bg=mistake?"#fdecea":getCellBg(cell);
                             const tc=mistake?C.red:getCellText(cell);
                             const rep=getRepeat(ri,ci);
+                            const repIdx=rep?repeatMarkers.findIndex(m=>m.id===rep.id):-1;
+                            const repColor=repIdx>=0?REPEAT_COLORS[repIdx%REPEAT_COLORS.length]:null;
+                            const isRepTop=rep&&ri===rep.rStart;
+                            const isRepBottom=rep&&ri===rep.rEnd;
+                            const isRepLeft=rep&&ci===rep.cStart;
+                            const isRepRight=rep&&ci===rep.cEnd;
                             const isTenCol=(ci+1)%10===0,isFiveCol=(ci+1)%5===0&&!isTenCol;
                             const inSel=inSelection(ri,ci);
                             const isMarked=stitchMarkers.has(`${ri}_${ci}`);
                             const isColPos=currentCol!==null&&ci===currentCol;
                             const isActiveStitch=isCurrent&&isColPos;
+                            const cellBg=isActiveStitch?C.accent:inSel?accentRgba(0.18):isColPos?accentRgba(0.12):
+                              repColor?`linear-gradient(${hexToRgba(repColor,0.13)},${hexToRgba(repColor,0.13)}),${bg}`:bg;
                             return (
                               <div key={ci}
                                 onMouseDown={()=>handleCellDown(ri,ci)}
@@ -1818,11 +2360,13 @@ export default function KnittingApp() {
                                 title={pastePreview?"Click to paste here":selMode?"Click and drag to select":markerMode?"Toggle marker":mistake?(mistakeNote(ri,ci)?`⚠ ${mistakeNote(ri,ci)}`:"⚠ double-click to note"):`${s.label}${yarnPalette.find(y=>y.id===cell.yarn)?` · ${yarnPalette.find(y=>y.id===cell.yarn).name}`:""}`}
                                 style={{
                                   width:cellSize,height:cellSize,flexShrink:0,
-                                  background:isActiveStitch?C.accent:inSel?accentRgba(0.18):isColPos?accentRgba(0.12):bg,
+                                  background:cellBg,
                                   border:`0.5px solid rgba(184,165,149,0.3)`,
-                                  borderRight:isTenCol?`2px solid ${C.accent}`:isFiveCol?`1.5px solid ${C.accent}`:`0.5px solid rgba(184,165,149,0.3)`,
-                                  borderLeft:isColPos&&!isActiveStitch?`1.5px solid ${C.accent}`:`0.5px solid rgba(184,165,149,0.3)`,
-                                  outline:isActiveStitch?`2px solid ${C.accent}`:inSel?`2px solid ${C.accent}`:mistake?`1.5px solid ${C.red}`:rep?`1.5px solid ${C.accent}`:undefined,
+                                  borderTop:isRepTop?`2.5px solid ${repColor}`:`0.5px solid rgba(184,165,149,0.3)`,
+                                  borderBottom:isRepBottom?`2.5px solid ${repColor}`:`0.5px solid rgba(184,165,149,0.3)`,
+                                  borderRight:isRepRight?`2.5px solid ${repColor}`:isTenCol?`2px solid ${C.accent}`:isFiveCol?`1.5px solid ${C.accent}`:`0.5px solid rgba(184,165,149,0.3)`,
+                                  borderLeft:isRepLeft?`2.5px solid ${repColor}`:isColPos&&!isActiveStitch?`1.5px solid ${C.accent}`:`0.5px solid rgba(184,165,149,0.3)`,
+                                  outline:isActiveStitch?`2px solid ${C.accent}`:inSel?`2px solid ${C.accent}`:mistake?`1.5px solid ${C.red}`:undefined,
                                   outlineOffset:"-1px",
                                   display:"flex",alignItems:"center",justifyContent:"center",
                                   fontSize:Math.max(8,cellSize*0.44),color:isActiveStitch?contrastText(C.accent):tc,fontWeight:"bold",
@@ -1886,6 +2430,7 @@ export default function KnittingApp() {
                 <button onClick={()=>{toggleRowComplete(currentRow);setCurrentRow(r=>Math.max(0,r-1));setCurrentCol(null);}} style={btnPrimary}>✓ Done → Next</button>
               </div>
             </div>
+
           </div>
         )}
 
@@ -2227,6 +2772,205 @@ export default function KnittingApp() {
           )}
 
         </div>
+        )}
+
+        {/* ═══ NEEDLE LIBRARY ══════════════════════════════════════════ */}
+        {appMode==="library"&&libraryView==="needles"&&(
+          <div style={{maxWidth:820,margin:"0 auto",padding:"24px 24px"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>📌 Needle Library</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{needleLibrary.length} needle{needleLibrary.length!==1?"s":""} recorded</div>
+              </div>
+              <button onClick={()=>openModal("newNeedle",{nType:"Circular"})} style={btnPrimary}>+ Add needle</button>
+            </div>
+            {needleLibrary.length===0?(
+              <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:32,marginBottom:12}}>📌</div>
+                <div style={{fontSize:15,fontWeight:"bold",marginBottom:6}}>No needles yet</div>
+                <div style={{fontSize:13}}>Click "Add needle" to start building your library.</div>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                {NEEDLE_TYPES.map(type=>{
+                  const needles=needleLibrary.filter(n=>n.type===type).sort((a,b)=>parseFloat(a.sizeMm)-parseFloat(b.sizeMm));
+                  if(!needles.length)return null;
+                  return(
+                    <div key={type}>
+                      <div style={{fontSize:11,fontWeight:"bold",color:C.muted,letterSpacing:1,marginBottom:8,paddingBottom:4,borderBottom:`1px solid ${C.border}`}}>{type.toUpperCase()}</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {needles.map(n=>(
+                          <div key={n.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8}}>
+                            <div style={{width:48,height:48,borderRadius:8,background:C.surface2,border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                              <span style={{fontSize:15,fontWeight:"bold",color:C.text}}>{n.sizeMm}</span>
+                              <span style={{fontSize:9,color:C.muted}}>mm</span>
+                            </div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:13,fontWeight:"bold",color:C.text}}>
+                                {[n.brand,n.series].filter(Boolean).join(" ")||n.material||n.type}
+                                {n.sizeUS&&<span style={{fontSize:11,fontWeight:"normal",color:C.muted,marginLeft:6}}>US {n.sizeUS}</span>}
+                              </div>
+                              <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                                {[n.sizeMm&&`${n.sizeMm}mm`,n.length&&`${n.length}cm`,n.material].filter(Boolean).join(" · ")}
+                              </div>
+                              {n.purchaseDate&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>Purchased {formatFlexDate(n.purchaseDate)}</div>}
+                              {n.notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{n.notes}</div>}
+                              {n.cords&&n.cords.length>0&&(
+                                <div style={{marginTop:4,display:"flex",flexWrap:"wrap",gap:4}}>
+                                  {n.cords.map((c,i)=>(
+                                    <span key={i} style={{fontSize:10,padding:"1px 7px",borderRadius:10,background:C.surface2,border:`1px solid ${C.border}`,color:C.text}}>{c.length}cm{c.qty&&c.qty!=="1"?` ×${c.qty}`:""}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{display:"flex",gap:6,flexShrink:0}}>
+                              <button onClick={()=>openModal("newNeedle",{editing:n.id,nType:n.type,nMm:n.sizeMm,nUS:n.sizeUS,nLength:n.length,nMaterial:n.material,nBrand:NEEDLE_BRANDS.includes(n.brand)?n.brand:"Other",nBrandCustom:NEEDLE_BRANDS.includes(n.brand)?"":n.brand,nSeries:n.series||"",...(()=>{const p=parsePurchaseDate(n.purchaseDate);return{nPdY:p.y,nPdM:p.m,nPdD:p.day};})(),nNotes:n.notes,nCords:n.cords?n.cords.map(c=>({...c})):[]})} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>Edit</button>
+                              <button onClick={()=>setNeedleLibrary(prev=>prev.filter(x=>x.id!==n.id))} style={{...btnDanger,fontSize:11,padding:"4px 10px"}}>Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {appMode==="library"&&libraryView==="tools"&&(
+          <div style={{maxWidth:820,margin:"0 auto",padding:"24px 24px"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>🛠 Tools Library</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{equipLibrary.length} item{equipLibrary.length!==1?"s":""} recorded</div>
+              </div>
+              <button onClick={()=>openModal("newTool",{eType:"Wheel"})} style={btnPrimary}>+ Add tool</button>
+            </div>
+            {equipLibrary.length===0?(
+              <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:32,marginBottom:12}}>🛠</div>
+                <div style={{fontSize:15,fontWeight:"bold",marginBottom:6}}>No tools yet</div>
+                <div style={{fontSize:13}}>Click "Add tool" to record your wheels, spindles, and tools.</div>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                {EQUIP_TYPES.map(type=>{
+                  const items=equipLibrary.filter(e=>e.type===type);
+                  if(!items.length)return null;
+                  return(
+                    <div key={type}>
+                      <div style={{fontSize:11,fontWeight:"bold",color:C.muted,letterSpacing:1,marginBottom:8,paddingBottom:4,borderBottom:`1px solid ${C.border}`}}>{type.toUpperCase()}</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {items.map(e=>(
+                          <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:13,fontWeight:"bold",color:C.text}}>
+                                {[e.brand,e.model].filter(Boolean).join(" ")||e.type}
+                              </div>
+                              <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                                {[e.ratios&&`Ratios: ${e.ratios}`,e.hookSizes&&`Hooks/Whorls: ${e.hookSizes}`,e.weightG&&`${e.weightG}g`].filter(Boolean).join(" · ")}
+                              </div>
+                              {e.purchaseDate&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>Purchased {formatFlexDate(e.purchaseDate)}</div>}
+                              {e.notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{e.notes}</div>}
+                            </div>
+                            <div style={{display:"flex",gap:6,flexShrink:0}}>
+                              <button onClick={()=>{const p=parsePurchaseDate(e.purchaseDate);openModal("newTool",{editing:e.id,eType:e.type,eBrand:e.brand,eModel:e.model,eRatios:e.ratios,eHookSizes:e.hookSizes,eWeightG:e.weightG,ePdY:p.y,ePdM:p.m,ePdD:p.day,eNotes:e.notes});}} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>Edit</button>
+                              <button onClick={()=>setEquipLibrary(prev=>prev.filter(x=>x.id!==e.id))} style={{...btnDanger,fontSize:11,padding:"4px 10px"}}>Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {appMode==="library"&&libraryView==="yarn"&&(
+          <div style={{maxWidth:820,margin:"0 auto",padding:"24px 24px"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>🧶 Yarn Stash</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{yarnLibrary.length} yarn{yarnLibrary.length!==1?"s":""} recorded</div>
+              </div>
+              <button onClick={()=>openModal("newYarnEntry",{})} style={btnPrimary}>+ Add yarn</button>
+            </div>
+            {yarnLibrary.length===0?(
+              <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:32,marginBottom:12}}>🧶</div>
+                <div style={{fontSize:15,fontWeight:"bold",marginBottom:6}}>No yarn recorded yet</div>
+                <div style={{fontSize:13}}>Click "Add yarn" to start building your stash.</div>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {yarnLibrary.map(y=>(
+                  <div key={y.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8}}>
+                    <div style={{width:40,height:40,borderRadius:"50%",background:y.color||"#d4c5b0",border:`2px solid ${C.border}`,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:"bold",color:C.text}}>
+                        {[y.brand,y.colourway].filter(Boolean).join(" — ")||"Unnamed yarn"}
+                      </div>
+                      <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                        {[y.weight,y.fibre,y.yardage&&`${y.yardage} yds`,y.skeinWeight&&`${y.skeinWeight}g/skein`,y.skeins&&`${y.skeins} skein${parseFloat(y.skeins)!==1?"s":""}`].filter(Boolean).join(" · ")}
+                      </div>
+                      {(y.shop||y.price)&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>{[y.shop,y.price].filter(Boolean).join(" · ")}</div>}
+                      {y.purchaseDate&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>Purchased {formatFlexDate(y.purchaseDate)}</div>}
+                      {y.notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{y.notes}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <button onClick={()=>{const p=parsePurchaseDate(y.purchaseDate);openModal("newYarnEntry",{editing:y.id,yBrand:YARN_BRANDS.includes(y.brand)?y.brand:"Other",yBrandCustom:YARN_BRANDS.includes(y.brand)?"":y.brand,yColourway:y.colourway,yWeight:y.weight,yFibre:y.fibre,yYardage:y.yardage,ySkeinWeight:y.skeinWeight,ySkeins:y.skeins,yColor:y.color,yPdY:p.y,yPdM:p.m,yPdD:p.day,yShop:y.shop,yPrice:y.price,yNotes:y.notes});}} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>Edit</button>
+                      <button onClick={()=>setYarnLibrary(prev=>prev.filter(x=>x.id!==y.id))} style={{...btnDanger,fontSize:11,padding:"4px 10px"}}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {appMode==="library"&&libraryView==="fibre"&&(
+          <div style={{maxWidth:820,margin:"0 auto",padding:"24px 24px"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>🌿 Fibre Stash</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{fibreLibrary.length} fibre{fibreLibrary.length!==1?"s":""} recorded</div>
+              </div>
+              <button onClick={()=>openModal("newFibre",{})} style={btnPrimary}>+ Add fibre</button>
+            </div>
+            {fibreLibrary.length===0?(
+              <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:32,marginBottom:12}}>🌿</div>
+                <div style={{fontSize:15,fontWeight:"bold",marginBottom:6}}>No fibre recorded yet</div>
+                <div style={{fontSize:13}}>Click "Add fibre" to record your raw fibre stash.</div>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {fibreLibrary.map(f=>(
+                  <div key={f.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8}}>
+                    <div style={{width:40,height:40,borderRadius:6,background:f.color||"#d4c5b0",border:`2px solid ${C.border}`,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:"bold",color:C.text}}>
+                        {[f.type,f.breed].filter(Boolean).join(" — ")||"Unnamed fibre"}
+                      </div>
+                      <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                        {[f.dyer&&`Dyer: ${f.dyer}`,f.colourway,f.weightG&&`${f.weightG}g`,f.prep].filter(Boolean).join(" · ")}
+                      </div>
+                      {f.shop&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>{f.shop}</div>}
+                      {f.purchaseDate&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>Purchased {formatFlexDate(f.purchaseDate)}</div>}
+                      {f.notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{f.notes}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <button onClick={()=>{const p=parsePurchaseDate(f.purchaseDate);openModal("newFibre",{editing:f.id,fType:f.type,fBreed:f.breed,fDyer:f.dyer,fColourway:f.colourway,fWeightG:f.weightG,fPrep:f.prep,fColor:f.color,fPdY:p.y,fPdM:p.m,fPdD:p.day,fShop:f.shop,fNotes:f.notes});}} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>Edit</button>
+                      <button onClick={()=>setFibreLibrary(prev=>prev.filter(x=>x.id!==f.id))} style={{...btnDanger,fontSize:11,padding:"4px 10px"}}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
       </div>
