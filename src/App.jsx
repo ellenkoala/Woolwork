@@ -555,9 +555,10 @@ export default function KnittingApp() {
     const uid = session.user.id;
     setDbLoading(true);
     (async()=>{
-      const [{data:kRows},{data:sRows}] = await Promise.all([
+      const [{data:kRows},{data:sRows},{data:libRow}] = await Promise.all([
         supabase.from("knitting_projects").select("id,data").eq("user_id",uid),
         supabase.from("spinning_projects").select("id,data").eq("user_id",uid),
+        supabase.from("user_library").select("needles,equip,yarn,fibre").eq("user_id",uid).maybeSingle(),
       ]);
       if(kRows && kRows.length>0){
         setProjects(kRows.map(r=>migrateProject(r.data)));
@@ -576,6 +577,16 @@ export default function KnittingApp() {
           const now=new Date().toISOString();
           await Promise.all(local.map(p=>supabase.from("spinning_projects").upsert({id:p.id,user_id:uid,data:p,updated_at:now})));
         }
+      }
+      if(libRow){
+        if(libRow.needles) setNeedleLibrary(libRow.needles);
+        if(libRow.equip)   setEquipLibrary(libRow.equip);
+        if(libRow.yarn)    setYarnLibrary(libRow.yarn);
+        if(libRow.fibre)   setFibreLibrary(libRow.fibre);
+      } else {
+        const s=latestForSave.current;
+        const now=new Date().toISOString();
+        supabase.from("user_library").upsert({user_id:uid,needles:s.needleLibrary,equip:s.equipLibrary,yarn:s.yarnLibrary,fibre:s.fibreLibrary,updated_at:now}).then();
       }
       setDbLoading(false);
     })();
@@ -618,6 +629,14 @@ export default function KnittingApp() {
         s.spinProjects.forEach(p=>{
           supabase.from("spinning_projects").upsert({id:p.id,user_id:uid,data:p,updated_at:now}).then();
         });
+        supabase.from("user_library").upsert({
+          user_id:uid,
+          needles:s.needleLibrary,
+          equip:s.equipLibrary,
+          yarn:s.yarnLibrary,
+          fibre:s.fibreLibrary,
+          updated_at:now
+        }).then();
       }
     }catch(e){
       if(e.name==="QuotaExceededError") alert("Storage full — photos may not be saved. Try removing some photos or export a backup.");
