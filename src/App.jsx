@@ -263,6 +263,7 @@ function AuthScreen() {
 export default function KnittingApp() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [dbLoading, setDbLoading] = useState(false);
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{ setSession(session); setAuthLoading(false); });
     const {data:{subscription}} = supabase.auth.onAuthStateChange((_e,session)=>setSession(session));
@@ -479,7 +480,39 @@ export default function KnittingApp() {
   const saveTimerRef  = useRef(null);
   const toastTimerRef = useRef(null);
   const latestForSave = useRef({});
-  latestForSave.current = {projects,activeProjectId,spinProjects,activeSpinId,appMode,needleLibrary,equipLibrary,yarnLibrary,fibreLibrary,theme,customStitches,stitchOverrides,customProjectTypes,customProjectStatuses,customSpinStatuses,customFiberTypes,customSpinTools};
+  latestForSave.current = {projects,activeProjectId,spinProjects,activeSpinId,appMode,needleLibrary,equipLibrary,yarnLibrary,fibreLibrary,theme,customStitches,stitchOverrides,customProjectTypes,customProjectStatuses,customSpinStatuses,customFiberTypes,customSpinTools,session};
+
+  // ── Load from Supabase on login; migrate localStorage if DB is empty ──
+  useEffect(()=>{
+    if(!session) return;
+    const uid = session.user.id;
+    setDbLoading(true);
+    (async()=>{
+      const [{data:kRows},{data:sRows}] = await Promise.all([
+        supabase.from("knitting_projects").select("id,data").eq("user_id",uid),
+        supabase.from("spinning_projects").select("id,data").eq("user_id",uid),
+      ]);
+      if(kRows && kRows.length>0){
+        setProjects(kRows.map(r=>migrateProject(r.data)));
+      } else {
+        const local=latestForSave.current.projects;
+        if(local.length>0){
+          const now=new Date().toISOString();
+          await Promise.all(local.map(p=>supabase.from("knitting_projects").upsert({id:p.id,user_id:uid,data:p,updated_at:now})));
+        }
+      }
+      if(sRows && sRows.length>0){
+        setSpinProjects(sRows.map(r=>({photos:[],log:[],...r.data})));
+      } else {
+        const local=latestForSave.current.spinProjects;
+        if(local.length>0){
+          const now=new Date().toISOString();
+          await Promise.all(local.map(p=>supabase.from("spinning_projects").upsert({id:p.id,user_id:uid,data:p,updated_at:now})));
+        }
+      }
+      setDbLoading(false);
+    })();
+  },[session]);
 
   const doSave = useCallback((showToast=false)=>{
     const s=latestForSave.current;
@@ -507,6 +540,17 @@ export default function KnittingApp() {
         setSaveToast(true);
         if(toastTimerRef.current) clearTimeout(toastTimerRef.current);
         toastTimerRef.current=setTimeout(()=>setSaveToast(false),2200);
+      }
+      // Supabase cloud sync (fire-and-forget)
+      if(s.session){
+        const uid = s.session.user.id;
+        const now = new Date().toISOString();
+        s.projects.forEach(p=>{
+          supabase.from("knitting_projects").upsert({id:p.id,user_id:uid,data:p,updated_at:now}).then();
+        });
+        s.spinProjects.forEach(p=>{
+          supabase.from("spinning_projects").upsert({id:p.id,user_id:uid,data:p,updated_at:now}).then();
+        });
       }
     }catch(e){
       if(e.name==="QuotaExceededError") alert("Storage full — photos may not be saved. Try removing some photos or export a backup.");
@@ -1032,9 +1076,9 @@ export default function KnittingApp() {
   const lbl          = {fontSize:10,color:C.muted,letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:4};
 
   // ══════════════════════════════════════════════════════════════════════
-  if (authLoading) return (
+  if (authLoading||dbLoading) return (
     <div style={{minHeight:"100vh",background:DEFAULT_THEME.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Georgia','Times New Roman',serif",color:DEFAULT_THEME.muted,fontSize:14}}>
-      Loading…
+      {dbLoading?"Syncing your projects…":"Loading…"}
     </div>
   );
   if (!session) return <AuthScreen />;
