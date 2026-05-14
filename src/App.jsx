@@ -2133,6 +2133,9 @@ export default function KnittingApp() {
       {modal==="newFibre"&&(
         <Modal theme={C} title={modalData.editing?"Edit Fibre":"Add Fibre"} onClose={closeModal} width={440}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div style={{gridColumn:"1/-1"}}><span style={lbl}>Name</span>
+              <input placeholder="e.g. Springtime BFL" value={modalData.fName||""} onChange={e=>setModalData(d=>({...d,fName:e.target.value}))} style={inp}/>
+            </div>
             <div><span style={lbl}>Fibre type</span>
               <select value={modalData.fType||""} onChange={e=>setModalData(d=>({...d,fType:e.target.value}))} style={inp}>
                 <option value="">— select type —</option>
@@ -2184,10 +2187,10 @@ export default function KnittingApp() {
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button onClick={closeModal} style={btnSecondary}>Cancel</button>
             <button onClick={()=>{
-              if(!modalData.fType&&!modalData.fColourway)return;
+              if(!modalData.fName&&!modalData.fType&&!modalData.fColourway)return;
               const pdParts=[modalData.fPdY,modalData.fPdM&&modalData.fPdM.padStart(2,"0"),modalData.fPdD&&String(parseInt(modalData.fPdD)).padStart(2,"0")].filter(Boolean);
               const purchaseDate=modalData.fPdY?pdParts.join("-"):"";
-              const item={id:modalData.editing||newId(),type:modalData.fType||"",breed:modalData.fBreed||"",dyer:modalData.fDyer||"",colourway:modalData.fColourway||"",weightG:modalData.fWeightG||"",prep:modalData.fPrep||"",color:modalData.fColor||"#d4c5b0",purchaseDate,shop:modalData.fShop||"",notes:modalData.fNotes||""};
+              const item={id:modalData.editing||newId(),name:modalData.fName||"",type:modalData.fType||"",breed:modalData.fBreed||"",dyer:modalData.fDyer||"",colourway:modalData.fColourway||"",weightG:modalData.fWeightG||"",prep:modalData.fPrep||"",color:modalData.fColor||"#d4c5b0",purchaseDate,shop:modalData.fShop||"",notes:modalData.fNotes||""};
               if(modalData.editing)setFibreLibrary(prev=>prev.map(x=>x.id===modalData.editing?item:x));
               else setFibreLibrary(prev=>[...prev,item]);
               closeModal();
@@ -3393,8 +3396,9 @@ export default function KnittingApp() {
                     <div style={{width:40,height:40,borderRadius:6,background:f.color||"#d4c5b0",border:`2px solid ${C.border}`,flexShrink:0}}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:"bold",color:C.text}}>
-                        {[f.type,f.breed].filter(Boolean).join(" — ")||"Unnamed fibre"}
+                        {f.name||[f.type,f.breed].filter(Boolean).join(" — ")||"Unnamed fibre"}
                       </div>
+                      {f.name&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{[f.type,f.breed].filter(Boolean).join(" — ")}</div>}
                       <div style={{fontSize:11,color:C.muted,marginTop:2}}>
                         {[f.dyer&&`Dyer: ${f.dyer}`,f.colourway,f.weightG&&`${f.weightG}g`,f.prep].filter(Boolean).join(" · ")}
                       </div>
@@ -3403,7 +3407,7 @@ export default function KnittingApp() {
                       {f.notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{f.notes}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
-                      <button onClick={()=>{const p=parsePurchaseDate(f.purchaseDate);openModal("newFibre",{editing:f.id,fType:f.type,fBreed:f.breed,fDyer:f.dyer,fColourway:f.colourway,fWeightG:f.weightG,fPrep:f.prep,fColor:f.color,fPdY:p.y,fPdM:p.m,fPdD:p.day,fShop:f.shop,fNotes:f.notes});}} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>Edit</button>
+                      <button onClick={()=>{const p=parsePurchaseDate(f.purchaseDate);openModal("newFibre",{editing:f.id,fName:f.name||"",fType:f.type,fBreed:f.breed,fDyer:f.dyer,fColourway:f.colourway,fWeightG:f.weightG,fPrep:f.prep,fColor:f.color,fPdY:p.y,fPdM:p.m,fPdD:p.day,fShop:f.shop,fNotes:f.notes});}} style={{...btnSecondary,fontSize:11,padding:"4px 10px"}}>Edit</button>
                       <button onClick={()=>setFibreLibrary(prev=>prev.filter(x=>x.id!==f.id))} style={{...btnDanger,fontSize:11,padding:"4px 10px"}}>Delete</button>
                     </div>
                   </div>
