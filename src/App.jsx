@@ -191,7 +191,7 @@ function Modal({title,onClose,children,width=480,theme}){
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Auth Screen ────────────────────────────────────────────────────────────
-function AuthScreen() {
+function AuthScreen({onGuest}) {
   const [mode, setMode] = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -267,6 +267,10 @@ function AuthScreen() {
           {mode==="signup"&&<>Already have an account? <button onClick={()=>{setMode("signin");setError("");setMessage("");}} style={linkBtn}>Sign in</button></>}
           {mode==="forgot"&&<><button onClick={()=>{setMode("signin");setError("");setMessage("");}} style={linkBtn}>← Back to sign in</button></>}
         </div>
+        <div style={{borderTop:`1px solid ${C.border}`,marginTop:20,paddingTop:20,textAlign:"center"}}>
+          <button onClick={onGuest} style={{...linkBtn,fontSize:13,color:C.muted}}>Continue without account →</button>
+          <div style={{fontSize:11,color:C.muted,marginTop:4,opacity:0.7}}>Your data stays on this device only</div>
+        </div>
       </div>
     </div>
   );
@@ -323,6 +327,7 @@ export default function KnittingApp() {
   const [authLoading, setAuthLoading] = useState(true);
   const [dbLoading, setDbLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{ setSession(session); setAuthLoading(false); });
     const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=>{
@@ -1143,7 +1148,7 @@ export default function KnittingApp() {
       {dbLoading?"Syncing your projects…":"Loading…"}
     </div>
   );
-  if (!session) return <AuthScreen />;
+  if (!session && !guestMode) return <AuthScreen onGuest={()=>setGuestMode(true)} />;
   if (resetMode) return <ResetPasswordScreen onDone={()=>setResetMode(false)} />;
 
   return (
@@ -2280,7 +2285,10 @@ export default function KnittingApp() {
           ))}
           <button onClick={()=>openModal("theme")} style={{...btnSecondary,marginLeft:8,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>🎨 Theme</button>
           <button onClick={()=>openModal("manageLists")} style={{...btnSecondary,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>📋 Lists</button>
-          <button onClick={()=>supabase.auth.signOut()} style={{...btnSecondary,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>↩ Sign out</button>
+          {session
+            ?<button onClick={()=>supabase.auth.signOut()} style={{...btnSecondary,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>↩ Sign out</button>
+            :<button onClick={()=>setGuestMode(false)} style={{...btnSecondary,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>↩ Sign in</button>
+          }
         </div>
       </div>
 
