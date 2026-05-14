@@ -315,10 +315,13 @@ export default function KnittingApp() {
   const [selAction, setSelAction] = useState(null);    // result of extractSelection for actions
 
   // ── Undo / Redo ───────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(true); // true = Edit, false = Working
+
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
-  const strokeStartRef = useRef(null);  // grid snapshot at start of paint stroke
-  const didDrawRef     = useRef(false); // whether any cell was painted this stroke
+  const strokeStartRef  = useRef(null);  // grid snapshot at start of paint stroke
+  const didDrawRef      = useRef(false); // whether any cell was painted this stroke
+  const strokeEraseRef  = useRef(false); // true when stroke started on a filled cell (edit mode clear)
 
   // ── Clipboard library (global, across all projects) ───────────────────
   const [clipboard, setClipboard]       = useState([]); // [{id,name,cells,rows,cols,date}]
@@ -510,6 +513,7 @@ export default function KnittingApp() {
 
   // ── Paint ─────────────────────────────────────────────────────────────
   const paintCell = (r,c)=>{
+    if(!editMode)return;
     if(selMode)return;
     if(markerMode){
       const key=`${r}_${c}`;
@@ -523,16 +527,27 @@ export default function KnittingApp() {
       return;
     }
     didDrawRef.current=true;
-    setGrid(prev=>{
-      const n=prev.map(row=>row.map(cell=>({...cell})));
-      if(r<n.length&&c<n[r].length) n[r][c]={stitch:selectedStitch,yarn:selectedYarn||n[r][c].yarn||null};
-      return n;
-    });
+    if(strokeEraseRef.current){
+      setGrid(prev=>{
+        const n=prev.map(row=>row.map(cell=>({...cell})));
+        if(r<n.length&&c<n[r].length) n[r][c]={stitch:"empty",yarn:null};
+        return n;
+      });
+    } else {
+      setGrid(prev=>{
+        const n=prev.map(row=>row.map(cell=>({...cell})));
+        if(r<n.length&&c<n[r].length) n[r][c]={stitch:selectedStitch,yarn:selectedYarn||n[r][c].yarn||null};
+        return n;
+      });
+    }
   };
 
   const handleCellDown  = (r,c)=>{
     if(selMode){setSelDrag(true);setSelection({r1:r,c1:c,r2:r,c2:c});setSelAction(null);}
     else{
+      // In edit mode: clicking a filled cell starts an erase stroke
+      const cellStitch=grid[r]?.[c]?.stitch;
+      strokeEraseRef.current = editMode && !!cellStitch && cellStitch!=="empty" && selectedStitch!=="mistake";
       // Snapshot grid before stroke begins for undo
       strokeStartRef.current=grid.map(row=>row.map(c=>({...c})));
       didDrawRef.current=false;
@@ -649,7 +664,7 @@ export default function KnittingApp() {
         return n;
       });
     }
-    setSelection(null);setSelAction(null);setSelMode(false);
+    setSelection(null);setSelAction(null); // keep selMode on so user can select another region
   };
 
   const startPaste = (clipEntry) => {
@@ -2127,8 +2142,13 @@ export default function KnittingApp() {
               </select>
               <button onClick={()=>openModal("sections")} style={{...btnSecondary,fontSize:11,padding:"4px 12px"}}>⚙ Manage sections</button>
               <button onClick={()=>addSection()} style={{...btnSecondary,fontSize:11,padding:"4px 12px"}}>+ Add section</button>
-              <div style={{marginLeft:"auto",fontSize:11,color:C.muted}}>
-                {(activeProject.sections||[]).length} section{(activeProject.sections||[]).length!==1?"s":""} in this project
+              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:11,color:C.muted}}>{(activeProject.sections||[]).length} section{(activeProject.sections||[]).length!==1?"s":""} in this project</span>
+                {/* Edit / Working mode toggle */}
+                <div style={{display:"flex",borderRadius:20,overflow:"hidden",border:`1.5px solid ${C.border}`,flexShrink:0}}>
+                  <button onClick={()=>setEditMode(true)} style={{padding:"4px 14px",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:"bold",background:editMode?C.accent:"transparent",color:editMode?contrastText(C.accent):C.muted,transition:"all 0.2s"}}>✏ Edit</button>
+                  <button onClick={()=>setEditMode(false)} style={{padding:"4px 14px",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:"bold",background:!editMode?C.green:"transparent",color:!editMode?contrastText(C.green):C.muted,transition:"all 0.2s"}}>🧶 Working</button>
+                </div>
               </div>
             </div>
 
@@ -2195,40 +2215,43 @@ export default function KnittingApp() {
                 <button onClick={redo} disabled={!redoStack.length} title="Redo (Ctrl+Y)"
                   style={{...btnSecondary,opacity:redoStack.length?1:0.35}}>↪ Redo</button>
                 {/* Select button always visible */}
-                <button onClick={()=>{setSelMode(v=>{const next=!v;if(next){setMarkerMode(false);}else{setSelection(null);setSelAction(null);}return next;})}}
-                  style={{...btnSecondary,background:selMode?C.accent:"transparent",color:selMode?contrastText(C.accent):C.text,border:`1px solid ${selMode?C.accent:C.border}`,fontWeight:selMode?"bold":"normal"}}>
-                  ⬚ Select
-                </button>
-                {/* Selection transform actions — shown when a selection is active */}
-                {selAction&&(
-                  <>
-                    <button onClick={()=>applySelectionTransform(rotateCW)}  style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↻ Rotate</button>
-                    <button onClick={()=>applySelectionTransform(flipH)}     style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↔ Flip H</button>
-                    <button onClick={()=>applySelectionTransform(flipV)}     style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↕ Flip V</button>
-                    <button onClick={()=>copySelection(false)} style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>📋 Copy</button>
-                    <button onClick={()=>copySelection(true)}  style={{...btnDanger,fontSize:11,padding:"5px 10px"}}>✂ Cut</button>
-                    <button onClick={()=>{setSelection(null);setSelAction(null);setSelMode(false);}} style={{...btnSecondary,fontSize:11,padding:"5px 10px",color:C.muted}}>✕ Deselect</button>
-                  </>
-                )}
-                {/* Normal tools — always visible */}
-                <button onClick={()=>{setSelMode(false);setMarkerMode(v=>!v);}}
-                  style={{...btnSecondary,background:markerMode?C.accent:"transparent",color:markerMode?contrastText(C.accent):C.text,border:`1px solid ${markerMode?C.accent:C.border}`}}>
-                  🔴 Markers
-                </button>
-                <button onClick={()=>openModal("clipboard")} style={{...btnSecondary,position:"relative"}}>
-                  📎 Paste{clipboard.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",width:14,height:14,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{clipboard.length}</span>}
-                </button>
+                {/* Edit-mode-only tools */}
+                {editMode&&<>
+                  <button onClick={()=>{setSelMode(v=>{const next=!v;if(next){setMarkerMode(false);}else{setSelection(null);setSelAction(null);}return next;})}}
+                    style={{...btnSecondary,background:selMode?C.accent:"transparent",color:selMode?contrastText(C.accent):C.text,border:`1px solid ${selMode?C.accent:C.border}`,fontWeight:selMode?"bold":"normal"}}>
+                    ⬚ Range selection editor
+                  </button>
+                  {selAction&&(
+                    <>
+                      <button onClick={()=>applySelectionTransform(rotateCW)}  style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↻ Rotate</button>
+                      <button onClick={()=>applySelectionTransform(flipH)}     style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↔ Flip H</button>
+                      <button onClick={()=>applySelectionTransform(flipV)}     style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↕ Flip V</button>
+                      <button onClick={()=>copySelection(false)} style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>📋 Copy</button>
+                      <button onClick={()=>copySelection(true)}  style={{...btnDanger,fontSize:11,padding:"5px 10px"}}>✂ Cut</button>
+                      <button onClick={()=>{setSelection(null);setSelAction(null);setSelMode(false);}} style={{...btnSecondary,fontSize:11,padding:"5px 10px",color:C.muted}}>✕ Deselect</button>
+                    </>
+                  )}
+                  <button onClick={()=>{setSelMode(false);setMarkerMode(v=>!v);}}
+                    style={{...btnSecondary,background:markerMode?C.accent:"transparent",color:markerMode?contrastText(C.accent):C.text,border:`1px solid ${markerMode?C.accent:C.border}`}}>
+                    🔴 Markers
+                  </button>
+                  <button onClick={()=>openModal("clipboard")} style={{...btnSecondary,position:"relative"}}>
+                    📎 Paste{clipboard.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",width:14,height:14,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{clipboard.length}</span>}
+                  </button>
+                </>}
                 <div style={{display:"flex",border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",alignItems:"center"}}>
                   <button onClick={()=>setZoom(z=>Math.max(0.5,+(z-0.25).toFixed(2)))} style={{padding:"5px 9px",border:"none",background:"transparent",cursor:"pointer",fontSize:14,color:C.text,fontFamily:"inherit"}}>−</button>
                   <span style={{padding:"4px 7px",fontSize:11,color:C.muted,borderLeft:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`}}>{Math.round(zoom*100)}%</span>
                   <button onClick={()=>setZoom(z=>Math.min(3,+(z+0.25).toFixed(2)))} style={{padding:"5px 9px",border:"none",background:"transparent",cursor:"pointer",fontSize:14,color:C.text,fontFamily:"inherit"}}>+</button>
                 </div>
-                <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0});}} style={btnSecondary}>⊞ Resize</button>
-                <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Section marker</button>
+                {editMode&&<>
+                  <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0});}} style={btnSecondary}>⊞ Resize</button>
+                  <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Section marker</button>
+                  <button onClick={()=>{setImportText("");setImportImage(null);setImportError("");openModal("import");}} style={btnPrimary}>🪄 Import</button>
+                </>}
                 <button onClick={()=>openModal("rowRangeTracker",{})} style={{...btnSecondary,position:"relative"}}>
                   ⊙ Repeat tracker{rowRangeTrackers.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",fontSize:8,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{rowRangeTrackers.length}</span>}
                 </button>
-                <button onClick={()=>{setImportText("");setImportImage(null);setImportError("");openModal("import");}} style={btnPrimary}>🪄 Import</button>
                 <button onClick={()=>openModal("export",{exportContext:"knitting-project"})} style={btnSecondary}>⬇ Export</button>
                 <button onClick={()=>setShowSymbolKey(v=>!v)} style={btnSecondary}>{showSymbolKey?"Hide":"Show"} Key</button>
                 <button onClick={clearGrid} style={{...btnSecondary,color:C.muted}}>Clear</button>
@@ -2288,8 +2311,8 @@ export default function KnittingApp() {
               )}
             </div>
 
-            {/* ── Stitch palette (close to grid) ── */}
-            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
+            {/* ── Stitch palette (Edit mode only) ── */}
+            {editMode&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
               {/* Header */}
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:stitchPaletteOpen?6:0}}>
                 <button onClick={()=>setStitchPaletteOpen(v=>!v)} title={stitchPaletteOpen?"Collapse":"Expand"}
@@ -2348,7 +2371,7 @@ export default function KnittingApp() {
                   {selectedStitch&&<div style={{marginTop:3,fontSize:10,color:C.muted}}>▶ <strong style={{color:C.text}}>{getStitch(selectedStitch).label}</strong>{getStitch(selectedStitch).desc?` — ${getStitch(selectedStitch).desc}`:""}</div>}
                 </>
               )}
-            </div>
+            </div>}
 
             {/* ── Pattern Repeat Counters ── */}
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
