@@ -2221,14 +2221,14 @@ export default function KnittingApp() {
                     style={{...btnSecondary,background:selMode?C.accent:"transparent",color:selMode?contrastText(C.accent):C.text,border:`1px solid ${selMode?C.accent:C.border}`,fontWeight:selMode?"bold":"normal"}}>
                     ⬚ Range selection editor
                   </button>
-                  {selAction&&(
+                  {selMode&&(
                     <>
-                      <button onClick={()=>applySelectionTransform(rotateCW)}  style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↻ Rotate</button>
-                      <button onClick={()=>applySelectionTransform(flipH)}     style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↔ Flip H</button>
-                      <button onClick={()=>applySelectionTransform(flipV)}     style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>↕ Flip V</button>
-                      <button onClick={()=>copySelection(false)} style={{...btnSecondary,fontSize:11,padding:"5px 10px"}}>📋 Copy</button>
-                      <button onClick={()=>copySelection(true)}  style={{...btnDanger,fontSize:11,padding:"5px 10px"}}>✂ Cut</button>
-                      <button onClick={()=>{setSelection(null);setSelAction(null);setSelMode(false);}} style={{...btnSecondary,fontSize:11,padding:"5px 10px",color:C.muted}}>✕ Deselect</button>
+                      <button onClick={()=>applySelectionTransform(rotateCW)}  disabled={!selAction} style={{...btnSecondary,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>↻ Rotate</button>
+                      <button onClick={()=>applySelectionTransform(flipH)}     disabled={!selAction} style={{...btnSecondary,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>↔ Flip H</button>
+                      <button onClick={()=>applySelectionTransform(flipV)}     disabled={!selAction} style={{...btnSecondary,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>↕ Flip V</button>
+                      <button onClick={()=>copySelection(false)} disabled={!selAction} style={{...btnSecondary,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>📋 Copy</button>
+                      <button onClick={()=>copySelection(true)}  disabled={!selAction} style={{...btnDanger,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>✂ Cut</button>
+                      <button onClick={()=>{setSelection(null);setSelAction(null);}} style={{...btnSecondary,fontSize:11,padding:"5px 10px",color:C.muted,opacity:selAction?1:0.35}} disabled={!selAction}>✕ Clear</button>
                     </>
                   )}
                   <button onClick={()=>{setSelMode(false);setMarkerMode(v=>!v);}}
