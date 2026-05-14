@@ -2229,14 +2229,14 @@ export default function KnittingApp() {
                       <button onClick={()=>copySelection(false)} disabled={!selAction} style={{...btnSecondary,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>📋 Copy</button>
                       <button onClick={()=>copySelection(true)}  disabled={!selAction} style={{...btnDanger,fontSize:11,padding:"5px 10px",opacity:selAction?1:0.35}}>✂ Cut</button>
                       <button onClick={()=>{setSelection(null);setSelAction(null);}} style={{...btnSecondary,fontSize:11,padding:"5px 10px",color:C.muted,opacity:selAction?1:0.35}} disabled={!selAction}>✕ Clear</button>
+                      <button onClick={()=>openModal("clipboard")} style={{...btnSecondary,fontSize:11,padding:"5px 10px",position:"relative"}}>
+                        📎 Paste{clipboard.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",width:14,height:14,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{clipboard.length}</span>}
+                      </button>
                     </>
                   )}
                   <button onClick={()=>{setSelMode(false);setMarkerMode(v=>!v);}}
                     style={{...btnSecondary,background:markerMode?C.accent:"transparent",color:markerMode?contrastText(C.accent):C.text,border:`1px solid ${markerMode?C.accent:C.border}`}}>
                     🔴 Markers
-                  </button>
-                  <button onClick={()=>openModal("clipboard")} style={{...btnSecondary,position:"relative"}}>
-                    📎 Paste{clipboard.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",width:14,height:14,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{clipboard.length}</span>}
                   </button>
                 </>}
                 <div style={{display:"flex",border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",alignItems:"center"}}>
