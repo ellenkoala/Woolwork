@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { supabase } from "./supabase.js";
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 const DEFAULT_THEME = {
@@ -189,7 +190,79 @@ function Modal({title,onClose,children,width=480,theme}){
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// ── Auth Screen ────────────────────────────────────────────────────────────
+function AuthScreen() {
+  const [mode, setMode] = useState("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const C = DEFAULT_THEME;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(""); setMessage(""); setLoading(true);
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setMessage("Account created! You can now sign in.");
+        setMode("signin");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (err) { setError(err.message); }
+    setLoading(false);
+  }
+
+  const inp = {width:"100%",padding:"9px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,color:C.text,fontFamily:"inherit",fontSize:14,boxSizing:"border-box"};
+  const lbl = {fontSize:10,color:C.muted,letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:4};
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Georgia','Times New Roman',serif"}}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:40,width:360,boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:40,marginBottom:8}}>🧶</div>
+          <div style={{fontSize:22,fontWeight:"bold",letterSpacing:1,color:C.text}}>Woolwork</div>
+          <div style={{fontSize:10,color:C.muted,letterSpacing:2,textTransform:"uppercase"}}>Knitting Pattern Studio</div>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>Email</label>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required style={inp}/>
+          </div>
+          <div style={{marginBottom:20}}>
+            <label style={lbl}>Password</label>
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={6} style={inp}/>
+          </div>
+          {error&&<div style={{color:C.red,fontSize:12,marginBottom:12,padding:"8px 12px",background:"#fdecea",borderRadius:6}}>{error}</div>}
+          {message&&<div style={{color:C.green,fontSize:12,marginBottom:12,padding:"8px 12px",background:"#eef6ee",borderRadius:6}}>{message}</div>}
+          <button type="submit" disabled={loading} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:C.accent,color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:"bold",cursor:loading?"not-allowed":"pointer",opacity:loading?0.7:1}}>
+            {loading?"…":mode==="signup"?"Create Account":"Sign In"}
+          </button>
+        </form>
+        <div style={{textAlign:"center",marginTop:18,fontSize:13,color:C.muted}}>
+          {mode==="signin"
+            ?<>Don't have an account? <button onClick={()=>{setMode("signup");setError("");setMessage("");}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontFamily:"inherit",fontSize:13,textDecoration:"underline"}}>Sign up</button></>
+            :<>Already have an account? <button onClick={()=>{setMode("signin");setError("");setMessage("");}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontFamily:"inherit",fontSize:13,textDecoration:"underline"}}>Sign in</button></>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function KnittingApp() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{ setSession(session); setAuthLoading(false); });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_e,session)=>setSession(session));
+    return ()=>subscription.unsubscribe();
+  },[]);
+
   const [theme, setTheme] = useState(()=>{
     try{const s=localStorage.getItem("ww_theme");return s?JSON.parse(s):DEFAULT_THEME;}catch{return DEFAULT_THEME;}
   });
@@ -953,6 +1026,13 @@ export default function KnittingApp() {
   const lbl          = {fontSize:10,color:C.muted,letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:4};
 
   // ══════════════════════════════════════════════════════════════════════
+  if (authLoading) return (
+    <div style={{minHeight:"100vh",background:DEFAULT_THEME.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Georgia','Times New Roman',serif",color:DEFAULT_THEME.muted,fontSize:14}}>
+      Loading…
+    </div>
+  );
+  if (!session) return <AuthScreen />;
+
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Georgia','Times New Roman',serif",color:C.text,userSelect:"none"}} onMouseUp={handleMouseUp}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes marchingAnts{to{stroke-dashoffset:-16}} button:focus{outline:none}`}</style>
@@ -2087,6 +2167,7 @@ export default function KnittingApp() {
           ))}
           <button onClick={()=>openModal("theme")} style={{...btnSecondary,marginLeft:8,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>🎨 Theme</button>
           <button onClick={()=>openModal("manageLists")} style={{...btnSecondary,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>📋 Lists</button>
+          <button onClick={()=>supabase.auth.signOut()} style={{...btnSecondary,fontSize:11,background:"transparent",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.7)"}}>↩ Sign out</button>
         </div>
       </div>
 

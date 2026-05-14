@@ -5,6 +5,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react()],
+    resolve: { dedupe: ['react', 'react-dom'] },
     server: {
       proxy: {
         '/api/claude': {
