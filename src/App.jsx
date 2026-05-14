@@ -195,6 +195,7 @@ function AuthScreen() {
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -235,7 +236,12 @@ function AuthScreen() {
           </div>
           <div style={{marginBottom:20}}>
             <label style={lbl}>Password</label>
-            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={6} style={inp}/>
+            <div style={{position:"relative"}}>
+              <input type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} required minLength={6} style={{...inp,paddingRight:40}}/>
+              <button type="button" onClick={()=>setShowPassword(v=>!v)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:16,padding:0,lineHeight:1}}>
+                {showPassword?"🙈":"👁"}
+              </button>
+            </div>
           </div>
           {error&&<div style={{color:C.red,fontSize:12,marginBottom:12,padding:"8px 12px",background:"#fdecea",borderRadius:6}}>{error}</div>}
           {message&&<div style={{color:C.green,fontSize:12,marginBottom:12,padding:"8px 12px",background:"#eef6ee",borderRadius:6}}>{message}</div>}
