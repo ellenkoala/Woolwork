@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 const DEFAULT_THEME = {
@@ -156,6 +156,21 @@ function buildSpinningHTML(sp,cpLine){
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${sp.name} &#8212; Spinning</title><style>body{font-family:Georgia,serif;background:#f5f0eb;color:#3a2a1a;margin:0;padding:24px}.card{background:#fff;border:1px solid #d4c5b0;border-radius:8px;padding:24px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}th{background:#ede5da;padding:6px 10px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9a8a7a}td{padding:6px 10px;border-bottom:1px solid #ede5da}@media print{body{padding:12px}.card{break-inside:avoid}}</style></head><body><div class="card"><h1 style="font-size:22px;margin:0 0 4px">${sp.name}</h1><div style="font-size:12px;color:#9a8a7a;margin-bottom:18px">Created ${sp.created||""} &#183; <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:bold;background:${stBg};color:#fff">${sp.status}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">${h2("Fibre")+g2+`<div style="margin-bottom:9px"><div style="font-size:9px;color:#9a8a7a;letter-spacing:1px;text-transform:uppercase">${fibers.length>1?"BLEND":"TYPE"}</div>${typeof fiberHTML==="string"?`<div style="font-size:13px">${fiberHTML}</div>`:fiberHTML}</div>`+item("Purchased Weight",sp.fiberWeight?sp.fiberWeight+"g":"")+item("Source / Dyer",sp.source)+item("Colorway",sp.colorway)+item("Purchased at",sp.purchasePlace)+"</div>"+h2("Tool")+g2+item("Tool",sp.tool)+item("Details",sp.toolDetails)+item("Ratio / Whorl",sp.ratio)+item("Plies",sp.plies?sp.plies+"-ply":"")+item("Target Yardage",sp.targetYardage?sp.targetYardage+" yds":"")+"</div>"}</div>${h2("Processing")}<table><tr><th>Stage</th><th>Weight</th><th>Yield</th></tr><tr><td>Purchased (raw)</td><td>${sp.fiberWeight||"&#8212;"}g</td><td>&#8212;</td></tr><tr><td>After Washing</td><td>${sp.washedWeight?sp.washedWeight+"g":"not recorded"}</td><td>${washYld}</td></tr><tr><td>After Prep (carding/combing)</td><td>${sp.preparedWeight?sp.preparedWeight+"g":"not recorded"}</td><td>${prepYld}</td></tr></table>${h2("Progress")}${g2}${item("Spun",(sp.gSpun||0)+"g")}${item("Plied",(sp.gPlied||0)+"g")}${item("Finished Yardage",(sp.finishedYardage||0)+(sp.targetYardage?" / "+sp.targetYardage+" target":""))}${item("WPI",sp.wpi||0)}</div>${sp.log?.length?h2("Work Log")+`<table><tr><th>Date</th><th>Hours</th><th>Grams Spun</th><th>Notes</th></tr>${logRows}${logTotal}</table>`:""}${sp.photos?.length?h2("Photos")+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">${photos}</div>`:""}${sp.notes?h2("Notes")+`<div style="font-size:13px;white-space:pre-wrap">${sp.notes}</div>`:""}${cpHtml}</div></body></html>`;
 }
 
+// ── Persistence version & migration ───────────────────────────────────────
+const SAVE_VERSION = 1;
+
+function migrateSection(s) {
+  return {
+    rowRangeTrackers:[],patternRepeats:[],repeatMarkers:[],
+    stitchMarkers:[],mistakeMarkers:{},rowRepeats:{},
+    rowWidths:{},rowNotes:{},completedRows:[],currentCol:null,
+    ...s,
+  };
+}
+function migrateProject(p) {
+  return {yarnPalette:[],photos:[],log:[],notes:"",...p,sections:(p.sections||[]).map(migrateSection)};
+}
+
 // ── Modal (outside component so it never remounts on re-render) ────────────
 function Modal({title,onClose,children,width=480,theme}){
   const C=theme;
@@ -203,8 +218,8 @@ export default function KnittingApp() {
 
   // ── Projects ──────────────────────────────────────────────────────────
   const [projects, setProjects] = useState(()=>{
-    try{const s=localStorage.getItem("ww_projects");return s?JSON.parse(s):INIT_PROJECTS.map(p=>({...p,activeSectionId:p.sections[0].id}));}
-    catch{return INIT_PROJECTS.map(p=>({...p,activeSectionId:p.sections[0].id}));}
+    try{const s=localStorage.getItem("ww_projects");return s?JSON.parse(s).map(migrateProject):INIT_PROJECTS.map(p=>migrateProject({...p,activeSectionId:p.sections[0].id}));}
+    catch{return INIT_PROJECTS.map(p=>migrateProject({...p,activeSectionId:p.sections[0].id}));}
   });
   const [activeProjectId, setActiveProjectId] = useState(()=>{
     try{return localStorage.getItem("ww_active_project_id")||"p1";}catch{return "p1";}
@@ -353,7 +368,7 @@ export default function KnittingApp() {
 
   // ── Spinning state ────────────────────────────────────────────────────
   const [spinProjects,      setSpinProjects]      = useState(()=>{
-    try{const s=localStorage.getItem("ww_spin_projects");return s?JSON.parse(s):[];}catch{return [];}
+    try{const s=localStorage.getItem("ww_spin_projects");return s?JSON.parse(s).map(sp=>({photos:[],log:[],...sp})):[];}catch{return [];}
   });
   const [activeSpinId,      setActiveSpinId]      = useState(()=>{
     try{return localStorage.getItem("ww_active_spin_id")||null;}catch{return null;}
@@ -376,24 +391,60 @@ export default function KnittingApp() {
   const photoInputRef    = useRef();
   const spinPhotoInputRef= useRef();
 
-  // ── localStorage persistence ──────────────────────────────────────────
-  useEffect(()=>{ try{localStorage.setItem("ww_projects",          JSON.stringify(projects));}catch(e){if(e.name==="QuotaExceededError")alert("Storage full — photos may not be saved. Try removing some photos or export a backup.");} }, [projects]);
-  useEffect(()=>{ try{localStorage.setItem("ww_active_project_id", activeProjectId);}catch{} },          [activeProjectId]);
-  useEffect(()=>{ try{localStorage.setItem("ww_spin_projects",     JSON.stringify(spinProjects));}catch(e){if(e.name==="QuotaExceededError")alert("Storage full — photos may not be saved. Try removing some photos or export a backup.");} }, [spinProjects]);
-  useEffect(()=>{ try{localStorage.setItem("ww_active_spin_id",    activeSpinId||"");}catch{} },          [activeSpinId]);
-  useEffect(()=>{ try{localStorage.setItem("ww_app_mode",          appMode);}catch{} },                   [appMode]);
-  useEffect(()=>{ try{localStorage.setItem("ww_needles",    JSON.stringify(needleLibrary)); }catch{} }, [needleLibrary]);
-  useEffect(()=>{ try{localStorage.setItem("ww_equip",     JSON.stringify(equipLibrary));  }catch{} }, [equipLibrary]);
-  useEffect(()=>{ try{localStorage.setItem("ww_yarn_lib",  JSON.stringify(yarnLibrary));   }catch{} }, [yarnLibrary]);
-  useEffect(()=>{ try{localStorage.setItem("ww_fibre",     JSON.stringify(fibreLibrary));  }catch{} }, [fibreLibrary]);
-  useEffect(()=>{ try{localStorage.setItem("ww_theme",             JSON.stringify(theme));}catch{} },     [theme]);
-  useEffect(()=>{ try{localStorage.setItem("ww_custom_stitches",      JSON.stringify(customStitches));}catch{} },      [customStitches]);
-  useEffect(()=>{ try{localStorage.setItem("ww_stitch_overrides",     JSON.stringify(stitchOverrides));}catch{} },     [stitchOverrides]);
-  useEffect(()=>{ try{localStorage.setItem("ww_custom_project_types",    JSON.stringify(customProjectTypes));}catch{} },    [customProjectTypes]);
-  useEffect(()=>{ try{localStorage.setItem("ww_custom_project_statuses",JSON.stringify(customProjectStatuses));}catch{} }, [customProjectStatuses]);
-  useEffect(()=>{ try{localStorage.setItem("ww_custom_spin_statuses",   JSON.stringify(customSpinStatuses));}catch{} },    [customSpinStatuses]);
-  useEffect(()=>{ try{localStorage.setItem("ww_custom_fiber_types",     JSON.stringify(customFiberTypes));}catch{} },      [customFiberTypes]);
-  useEffect(()=>{ try{localStorage.setItem("ww_custom_spin_tools",      JSON.stringify(customSpinTools));}catch{} },       [customSpinTools]);
+  // ── Save state ────────────────────────────────────────────────────────
+  const [lastSaved,  setLastSaved]  = useState(null);
+  const [saveToast,  setSaveToast]  = useState(false);
+  const saveTimerRef  = useRef(null);
+  const toastTimerRef = useRef(null);
+  const latestForSave = useRef({});
+  latestForSave.current = {projects,activeProjectId,spinProjects,activeSpinId,appMode,needleLibrary,equipLibrary,yarnLibrary,fibreLibrary,theme,customStitches,stitchOverrides,customProjectTypes,customProjectStatuses,customSpinStatuses,customFiberTypes,customSpinTools};
+
+  const doSave = useCallback((showToast=false)=>{
+    const s=latestForSave.current;
+    try{
+      localStorage.setItem("ww_version",   String(SAVE_VERSION));
+      localStorage.setItem("ww_projects",  JSON.stringify(s.projects));
+      localStorage.setItem("ww_active_project_id", s.activeProjectId);
+      localStorage.setItem("ww_spin_projects", JSON.stringify(s.spinProjects));
+      localStorage.setItem("ww_active_spin_id", s.activeSpinId||"");
+      localStorage.setItem("ww_app_mode",  s.appMode);
+      localStorage.setItem("ww_needles",   JSON.stringify(s.needleLibrary));
+      localStorage.setItem("ww_equip",     JSON.stringify(s.equipLibrary));
+      localStorage.setItem("ww_yarn_lib",  JSON.stringify(s.yarnLibrary));
+      localStorage.setItem("ww_fibre",     JSON.stringify(s.fibreLibrary));
+      localStorage.setItem("ww_theme",     JSON.stringify(s.theme));
+      localStorage.setItem("ww_custom_stitches",          JSON.stringify(s.customStitches));
+      localStorage.setItem("ww_stitch_overrides",         JSON.stringify(s.stitchOverrides));
+      localStorage.setItem("ww_custom_project_types",    JSON.stringify(s.customProjectTypes));
+      localStorage.setItem("ww_custom_project_statuses", JSON.stringify(s.customProjectStatuses));
+      localStorage.setItem("ww_custom_spin_statuses",    JSON.stringify(s.customSpinStatuses));
+      localStorage.setItem("ww_custom_fiber_types",      JSON.stringify(s.customFiberTypes));
+      localStorage.setItem("ww_custom_spin_tools",       JSON.stringify(s.customSpinTools));
+      setLastSaved(new Date());
+      if(showToast){
+        setSaveToast(true);
+        if(toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current=setTimeout(()=>setSaveToast(false),2200);
+      }
+    }catch(e){
+      if(e.name==="QuotaExceededError") alert("Storage full — photos may not be saved. Try removing some photos or export a backup.");
+    }
+  },[]); // stable — reads from ref
+
+  // Debounced auto-save (500 ms after last change)
+  useEffect(()=>{
+    if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current=setTimeout(()=>doSave(false),500);
+    return()=>clearTimeout(saveTimerRef.current);
+  },[projects,activeProjectId,spinProjects,activeSpinId,appMode,needleLibrary,equipLibrary,yarnLibrary,fibreLibrary,theme,customStitches,stitchOverrides,customProjectTypes,customProjectStatuses,customSpinStatuses,customFiberTypes,customSpinTools,doSave]);
+
+  // Ctrl+S manual save
+  useEffect(()=>{
+    const handler=e=>{if((e.ctrlKey||e.metaKey)&&e.key==="s"){e.preventDefault();doSave(true);}};
+    window.addEventListener("keydown",handler);
+    return()=>window.removeEventListener("keydown",handler);
+  },[doSave]);
+
   // Clear undo/redo when switching sections so history doesn't bleed across
   useEffect(()=>{ setUndoStack([]); setRedoStack([]); }, [activeSectionId]);
 
@@ -2036,6 +2087,13 @@ export default function KnittingApp() {
         </div>
       </div>
 
+      {/* ── Save toast ── */}
+      {saveToast&&(
+        <div style={{position:"fixed",bottom:24,right:24,zIndex:500,background:C.green,color:contrastText(C.green),padding:"10px 18px",borderRadius:8,fontSize:13,fontWeight:"bold",boxShadow:"0 4px 16px rgba(0,0,0,0.18)",pointerEvents:"none",display:"flex",alignItems:"center",gap:8,animation:"fadeIn 0.15s ease"}}>
+          ✓ Saved
+        </div>
+      )}
+
       {appMode==="knitting"&&importSuccess&&(
         <div style={{background:"#edf5ed",borderBottom:"1px solid #b8d4b8",padding:"7px 24px",display:"flex",alignItems:"center",gap:10}}>
           <span style={{color:C.green}}>✓</span><span style={{fontSize:13}}><strong>Imported:</strong> {importSuccess}</span>
@@ -2122,7 +2180,15 @@ export default function KnittingApp() {
               <span style={{fontSize:12,color:C.muted}}>
                 {selMode?<>Mode: <strong style={{color:C.text}}>Select</strong></>:markerMode?<>Mode: <strong style={{color:C.text}}>Stitch Markers</strong></>:<>Stitch: <strong style={{color:C.text}}>{getStitch(selectedStitch).label}</strong></>}
               </span>
-              <div style={{marginLeft:"auto",display:"flex",gap:5,flexWrap:"wrap"}}>
+              <div style={{marginLeft:"auto",display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                {/* Save */}
+                <div style={{display:"flex",alignItems:"center",gap:5,marginRight:4}}>
+                  {lastSaved&&<span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>
+                    {(()=>{const d=Math.floor((Date.now()-lastSaved.getTime())/60000);return d<1?"Saved just now":d===1?"Saved 1 min ago":`Saved ${d} min ago`;})()}
+                  </span>}
+                  <button onClick={()=>doSave(true)} title="Save (Ctrl+S)"
+                    style={{...btnSecondary,fontWeight:"bold",borderColor:C.accent,color:C.accent}}>💾 Save</button>
+                </div>
                 {/* Undo / Redo */}
                 <button onClick={undo} disabled={!undoStack.length} title="Undo (Ctrl+Z)"
                   style={{...btnSecondary,opacity:undoStack.length?1:0.35}}>↩ Undo</button>
@@ -2158,9 +2224,9 @@ export default function KnittingApp() {
                   <button onClick={()=>setZoom(z=>Math.min(3,+(z+0.25).toFixed(2)))} style={{padding:"5px 9px",border:"none",background:"transparent",cursor:"pointer",fontSize:14,color:C.text,fontFamily:"inherit"}}>+</button>
                 </div>
                 <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0});}} style={btnSecondary}>⊞ Resize</button>
-                <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Repeat</button>
+                <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Section marker</button>
                 <button onClick={()=>openModal("rowRangeTracker",{})} style={{...btnSecondary,position:"relative"}}>
-                  ⊙ Trackers{rowRangeTrackers.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",fontSize:8,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{rowRangeTrackers.length}</span>}
+                  ⊙ Repeat tracker{rowRangeTrackers.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",fontSize:8,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{rowRangeTrackers.length}</span>}
                 </button>
                 <button onClick={()=>{setImportText("");setImportImage(null);setImportError("");openModal("import");}} style={btnPrimary}>🪄 Import</button>
                 <button onClick={()=>openModal("export",{exportContext:"knitting-project"})} style={btnSecondary}>⬇ Export</button>
