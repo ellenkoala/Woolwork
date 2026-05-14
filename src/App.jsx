@@ -67,7 +67,7 @@ function formatFlexDate(d){if(!d)return"";const[y,m,day]=d.split("-");if(!m)retu
 function parsePurchaseDate(d){if(!d)return{y:"",m:"",day:""};const[y="",m="",day=""]= d.split("-");return{y,m,day};};
 
 function makeSection(name="Section 1",rows=20,cols=30){
-  return {id:newId(),name,rows,cols,grid:createGrid(rows,cols),completedRows:[],currentRow:rows-1,currentCol:null,rowNotes:{},rowWidths:{},rowRepeats:{},mistakeMarkers:{},stitchMarkers:[],repeatMarkers:[],patternRepeats:[]};
+  return {id:newId(),name,rows,cols,grid:createGrid(rows,cols),completedRows:[],currentRow:rows-1,currentCol:null,rowNotes:{},rowWidths:{},rowRepeats:{},mistakeMarkers:{},stitchMarkers:[],repeatMarkers:[],patternRepeats:[],rowRangeTrackers:[]};
 }
 
 const INIT_PROJECTS = [
@@ -236,7 +236,8 @@ export default function KnittingApp() {
   const mistakeMarkers= activeSection?.mistakeMarkers||{};
   const stitchMarkers = new Set(activeSection?.stitchMarkers||[]);
   const repeatMarkers   = activeSection?.repeatMarkers||[];
-  const patternRepeats  = activeSection?.patternRepeats||[];
+  const patternRepeats      = activeSection?.patternRepeats||[];
+  const rowRangeTrackers    = activeSection?.rowRangeTrackers||[];
 
   // Setters that write into the section
   const setGrid           = fn => updateActiveSection({grid: typeof fn==="function"?fn(grid):fn});
@@ -248,8 +249,36 @@ export default function KnittingApp() {
   const setRowRepeats     = fn => updateActiveSection({rowRepeats: typeof fn==="function"?fn(rowRepeats):fn});
   const setMistakeMarkers = fn => updateActiveSection({mistakeMarkers: typeof fn==="function"?fn(mistakeMarkers):fn});
   const setStitchMarkers  = fn => { const next=typeof fn==="function"?fn(stitchMarkers):fn; updateActiveSection({stitchMarkers:[...next]}); };
-  const setRepeatMarkers   = fn => updateActiveSection({repeatMarkers:   typeof fn==="function"?fn(repeatMarkers):fn});
-  const setPatternRepeats  = fn => updateActiveSection({patternRepeats:  typeof fn==="function"?fn(patternRepeats):fn});
+  const setRepeatMarkers    = fn => updateActiveSection({repeatMarkers:   typeof fn==="function"?fn(repeatMarkers):fn});
+  const setPatternRepeats   = fn => updateActiveSection({patternRepeats:  typeof fn==="function"?fn(patternRepeats):fn});
+  const setRowRangeTrackers = fn => updateActiveSection({rowRangeTrackers: typeof fn==="function"?fn(rowRangeTrackers):fn});
+
+  const rrRange = tr => ({
+    riStart: Math.max(0, gridRows - tr.endDisplay),
+    riEnd:   Math.min(gridRows-1, gridRows - tr.startDisplay),
+  });
+  const tickTrackerRow = (trackerId, ri) => {
+    setRowRangeTrackers(prev => prev.map(tr => {
+      if(tr.id!==trackerId) return tr;
+      const ticked=new Set(tr.tickedRows||[]);
+      if(ticked.has(ri)){ticked.delete(ri);return{...tr,tickedRows:[...ticked]};}
+      ticked.add(ri);
+      const {riStart,riEnd}=rrRange(tr);
+      let allDone=true;
+      for(let r=riStart;r<=riEnd;r++) if(!ticked.has(r)){allDone=false;break;}
+      if(allDone) return{...tr,doneRepeats:(tr.doneRepeats||0)+1,tickedRows:[]};
+      return{...tr,tickedRows:[...ticked]};
+    }));
+  };
+  const undoTrackerRepeat = trackerId => {
+    setRowRangeTrackers(prev => prev.map(tr => {
+      if(tr.id!==trackerId||(tr.doneRepeats||0)===0) return tr;
+      const {riStart,riEnd}=rrRange(tr);
+      const allRows=[];
+      for(let r=riStart;r<=riEnd;r++) allRows.push(r);
+      return{...tr,doneRepeats:tr.doneRepeats-1,tickedRows:allRows};
+    }));
+  };
 
   // ── Tool state ────────────────────────────────────────────────────────
   const [selectedStitch, setSelectedStitch] = useState("knit");
@@ -1609,6 +1638,77 @@ export default function KnittingApp() {
         </Modal>
       )}
 
+      {modal==="rowRangeTracker"&&(
+        <Modal theme={C} title="Row Range Trackers" onClose={closeModal} width={390}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Tick each row as you work it. When every row in the range is ticked, the repeat count goes up automatically. Click a ticked row to un-tick it.</div>
+          {rowRangeTrackers.length>0&&(
+            <div style={{marginBottom:12,background:C.surface2,borderRadius:6,padding:"6px 8px"}}>
+              <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:6}}>ACTIVE TRACKERS</div>
+              {rowRangeTrackers.map(tr=>{
+                const doneR=tr.doneRepeats||0,targetR=tr.targetRepeats||0;
+                return(
+                  <div key={tr.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:tr.color,flexShrink:0,border:`1px solid ${C.border}`}}/>
+                    <span style={{flex:1,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tr.name}</span>
+                    <span style={{fontSize:11,color:C.muted,flexShrink:0}}>rows {tr.startDisplay}–{tr.endDisplay}</span>
+                    <span style={{fontSize:11,color:C.accent,fontWeight:"bold",flexShrink:0}}>{doneR}{targetR>0?`/${targetR}`:""} ×</span>
+                    <button onClick={()=>setModalData(d=>({...d,rrEditing:tr.id,rrName:tr.name,rrStart:tr.startDisplay.toString(),rrEnd:tr.endDisplay.toString(),rrTarget:targetR>0?targetR.toString():"",rrColor:tr.color}))} style={{...btnSecondary,fontSize:9,padding:"1px 5px"}}>Edit</button>
+                    <button onClick={()=>setRowRangeTrackers(prev=>prev.filter(x=>x.id!==tr.id))} style={{...btnDanger,fontSize:9,padding:"1px 5px"}}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{borderTop:rowRangeTrackers.length?`1px solid ${C.border}`:"none",paddingTop:rowRangeTrackers.length?12:0}}>
+            <div style={{fontSize:11,color:C.text,fontWeight:"bold",marginBottom:8}}>{modalData.rrEditing?"Edit tracker":"Add tracker"}</div>
+            <div style={{marginBottom:8}}>
+              <span style={lbl}>Name</span>
+              <input placeholder="e.g. Main Pattern, Border repeat" value={modalData.rrName||""} onChange={e=>setModalData(d=>({...d,rrName:e.target.value}))} style={inp} autoFocus/>
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <div style={{flex:1}}>
+                <span style={lbl}>Start row</span>
+                <input type="number" min="1" max={gridRows} value={modalData.rrStart||""} onChange={e=>setModalData(d=>({...d,rrStart:e.target.value}))} style={inp} placeholder="e.g. 1"/>
+              </div>
+              <div style={{flex:1}}>
+                <span style={lbl}>End row</span>
+                <input type="number" min="1" max={gridRows} value={modalData.rrEnd||""} onChange={e=>setModalData(d=>({...d,rrEnd:e.target.value}))} style={inp} placeholder={`e.g. ${Math.min(10,gridRows)}`}/>
+              </div>
+            </div>
+            <div style={{marginBottom:8}}>
+              <span style={lbl}>Target repeats <span style={{textTransform:"none",fontWeight:"normal",color:C.muted}}>(optional — leave blank to count freely)</span></span>
+              <input type="number" min="1" value={modalData.rrTarget||""} onChange={e=>setModalData(d=>({...d,rrTarget:e.target.value}))} style={inp} placeholder="leave blank to count freely"/>
+            </div>
+            <div style={{marginBottom:14}}>
+              <span style={lbl}>Colour</span>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+                {REPEAT_COLORS.map(col=>(
+                  <button key={col} onClick={()=>setModalData(d=>({...d,rrColor:col}))} style={{width:20,height:20,borderRadius:"50%",background:col,border:(modalData.rrColor||REPEAT_COLORS[0])===col?`2.5px solid ${C.text}`:`1.5px solid ${C.border}`,cursor:"pointer",padding:0,flexShrink:0}}/>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              {modalData.rrEditing&&<button onClick={()=>setModalData(d=>({...d,rrEditing:null,rrName:"",rrStart:"",rrEnd:"",rrTarget:"",rrColor:""}))} style={btnSecondary}>Cancel edit</button>}
+              <button onClick={closeModal} style={btnSecondary}>Done</button>
+              <button onClick={()=>{
+                const name=(modalData.rrName||"").trim();
+                const start=parseInt(modalData.rrStart),end=parseInt(modalData.rrEnd);
+                if(!name||isNaN(start)||isNaN(end)||start<1||end<start||end>gridRows) return;
+                const color=modalData.rrColor||REPEAT_COLORS[rowRangeTrackers.length%REPEAT_COLORS.length];
+                const target=modalData.rrTarget?Math.max(1,parseInt(modalData.rrTarget)):0;
+                if(modalData.rrEditing){
+                  setRowRangeTrackers(prev=>prev.map(tr=>tr.id===modalData.rrEditing?{...tr,name,startDisplay:start,endDisplay:end,targetRepeats:target,color}:tr));
+                  setModalData(d=>({...d,rrEditing:null,rrName:"",rrStart:"",rrEnd:"",rrTarget:"",rrColor:""}));
+                } else {
+                  setRowRangeTrackers(prev=>[...prev,{id:newId(),name,startDisplay:start,endDisplay:end,targetRepeats:target,color,doneRepeats:0,tickedRows:[]}]);
+                  setModalData(d=>({...d,rrName:"",rrStart:"",rrEnd:"",rrTarget:"",rrColor:""}));
+                }
+              }} style={btnPrimary}>{modalData.rrEditing?"Save changes":"Add tracker"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {modal==="newTool"&&(
         <Modal theme={C} title={modalData.editing?"Edit Tool":"Add Tool"} onClose={closeModal} width={440}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
@@ -2059,6 +2159,9 @@ export default function KnittingApp() {
                 </div>
                 <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0});}} style={btnSecondary}>⊞ Resize</button>
                 <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Repeat</button>
+                <button onClick={()=>openModal("rowRangeTracker",{})} style={{...btnSecondary,position:"relative"}}>
+                  ⊙ Trackers{rowRangeTrackers.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:contrastText(C.accent),borderRadius:"50%",fontSize:8,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"bold"}}>{rowRangeTrackers.length}</span>}
+                </button>
                 <button onClick={()=>{setImportText("");setImportImage(null);setImportError("");openModal("import");}} style={btnPrimary}>🪄 Import</button>
                 <button onClick={()=>openModal("export",{exportContext:"knitting-project"})} style={btnSecondary}>⬇ Export</button>
                 <button onClick={()=>setShowSymbolKey(v=>!v)} style={btnSecondary}>{showSymbolKey?"Hide":"Show"} Key</button>
@@ -2262,7 +2365,7 @@ export default function KnittingApp() {
               {(()=>{
                 const ColRuler=({mt=0,mb=0})=>(
                   <div style={{display:"flex",marginTop:mt,marginBottom:mb}}>
-                    <div style={{flexShrink:0,width:96}}/>
+                    <div style={{flexShrink:0,width:96+(rowRangeTrackers.length*16)}}/>
                     <div style={{display:"flex",flexDirection:"column"}}>
                       <div style={{display:"flex"}}>
                         {Array.from({length:gridCols},(_,ci)=>{
@@ -2307,6 +2410,32 @@ export default function KnittingApp() {
                       const isHovRow=hoverCell&&hoverCell.row===ri;
                       return (
                         <div key={ri} style={{display:"flex",alignItems:"center",background:isCurrent?accentRgba(0.15):"transparent",opacity:done?0.45:1,borderBottom:isTenRow?`2.5px solid ${C.accent}`:isFiveRow?`1.5px solid ${C.border}`:"none",borderTop:isCurrent?`2px solid ${C.accent}`:"2px solid transparent",boxSizing:"border-box",position:"relative"}}>
+                          {/* ── Row-range tracker columns ── */}
+                          {rowRangeTrackers.map(tr=>{
+                            const{riStart,riEnd}=rrRange(tr);
+                            const inRange=ri>=riStart&&ri<=riEnd;
+                            const isTicked=new Set(tr.tickedRows||[]).has(ri);
+                            const isFirst=ri===riStart,isLast=ri===riEnd;
+                            const doneR=tr.doneRepeats||0,targetR=tr.targetRepeats||0;
+                            return(
+                              <div key={tr.id} style={{width:16,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",boxSizing:"border-box",
+                                background:inRange?hexToRgba(tr.color,0.07):"transparent",
+                                borderLeft:inRange?`2px solid ${tr.color}`:"2px solid transparent",
+                                borderTop:isFirst?`2px solid ${tr.color}`:"none",
+                                borderBottom:isLast?`2px solid ${tr.color}`:"none",
+                                height:"100%",minHeight:cellSize,
+                              }}>
+                                {isFirst&&<span style={{position:"absolute",top:1,left:0,right:0,textAlign:"center",fontSize:7,fontWeight:"bold",background:tr.color,color:contrastText(tr.color),borderRadius:2,lineHeight:1.4,zIndex:2,whiteSpace:"nowrap",overflow:"hidden",padding:"0 1px"}}>
+                                  {doneR}{targetR>0?`/${targetR}`:""}
+                                </span>}
+                                {inRange&&<button onClick={()=>tickTrackerRow(tr.id,ri)} title={`${tr.name}: ${isTicked?"Un-tick":"Tick"} row ${gridRows-ri}`}
+                                  style={{width:10,height:10,borderRadius:"50%",border:`1.5px solid ${tr.color}`,background:isTicked?tr.color:"transparent",cursor:"pointer",padding:0,flexShrink:0,marginTop:isFirst?9:0,marginBottom:isLast&&doneR>0?9:0}}/>}
+                                {isLast&&doneR>0&&<button onClick={()=>undoTrackerRepeat(tr.id)} title="Undo last completed repeat"
+                                  style={{position:"absolute",bottom:1,width:11,height:11,borderRadius:"50%",border:`1px solid ${tr.color}`,background:C.surface,color:tr.color,cursor:"pointer",fontSize:8,fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}
+                                >−</button>}
+                              </div>
+                            );
+                          })}
                           <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:3,paddingRight:4,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
                             <button onClick={()=>toggleRowComplete(ri)} style={{width:13,height:13,borderRadius:"50%",flexShrink:0,border:done?"none":`1px solid ${C.border}`,background:done?C.accent:"transparent",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                               {done&&<span style={{color:contrastText(C.accent),fontSize:7,fontWeight:"bold"}}>✓</span>}
@@ -2390,6 +2519,7 @@ export default function KnittingApp() {
                     })}
                     {/* Row 0 */}
                     <div style={{display:"flex",alignItems:"center",borderTop:`2px solid ${C.accent}`,marginTop:1}}>
+                      {rowRangeTrackers.map(tr=><div key={tr.id} style={{width:16,flexShrink:0}}/>)}
                       <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:4,paddingLeft:3}}>
                         <span style={{fontSize:9,color:C.accent,fontWeight:"bold"}}>0</span>
                         <span style={{fontSize:8,color:C.muted,fontStyle:"italic"}}>Cast On</span>
