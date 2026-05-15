@@ -2797,7 +2797,12 @@ export default function KnittingApp() {
                               <div key={ci}
                                 onMouseDown={()=>handleCellDown(ri,ci)}
                                 onMouseEnter={()=>handleCellEnter(ri,ci)}
-                                onDoubleClick={()=>{if(mistake)openModal("mistakeNote",{ri,ci,note:mistakeNote(ri,ci)});}}
+                                onDoubleClick={()=>{
+                  if(mistake)openModal("mistakeNote",{ri,ci,note:mistakeNote(ri,ci)});
+                  else if(editMode&&!selMode&&!markerMode&&!pastePreview){
+                    updateProject(activeProject.id,{sections:(activeProject.sections||[]).map(sec=>sec.id===activeSectionId?{...sec,cells:sec.cells.map((row,r)=>r===ri?row.map((cell,c)=>c===ci?{...cell,stitch:"empty",yarn:null}:cell):row)}:sec)});
+                  }
+                }}
                                 onClick={()=>{if(pastePreview)commitPaste(ri,ci);}}
                                 title={pastePreview?"Click to paste here":selMode?"Click and drag to select":markerMode?"Toggle marker":mistake?(mistakeNote(ri,ci)?`⚠ ${mistakeNote(ri,ci)}`:"⚠ double-click to note"):`${s.label}${yarnPalette.find(y=>y.id===cell.yarn)?` · ${yarnPalette.find(y=>y.id===cell.yarn).name}`:""}`}
                                 style={{
@@ -2904,7 +2909,7 @@ export default function KnittingApp() {
                     <div style={{fontSize:12,color:C.muted}}>{p.yarn}{p.needles?` · ${p.needles}`:""}</div>
                     <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
                       <span style={{fontSize:11,color:C.muted}}>{p.sections?.length||1} section{(p.sections?.length||1)!==1?"s":""}</span>
-                      {p.sections?.map(s=><span key={s.id} style={{fontSize:10,padding:"1px 8px",borderRadius:10,background:C.surface2,border:`1px solid ${C.border}`,color:C.muted}}>{s.name}</span>)}
+                      {p.sections?.map(s=><span key={s.id} style={{fontSize:10,padding:"1px 8px",borderRadius:10,background:C.surface2,border:`1px solid ${C.border}`,color:C.text}}>{s.name}</span>)}
                     </div>
                     {p.yarnPalette?.length>0&&<div style={{display:"flex",gap:3,marginTop:6}}>{p.yarnPalette.map(y=><div key={y.id} title={y.name} style={{width:12,height:12,borderRadius:"50%",background:y.color,border:`1px solid ${C.border}`}}/>)}</div>}
                   </div>
@@ -3225,7 +3230,11 @@ export default function KnittingApp() {
                 <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>📌 Needle Library</div>
                 <div style={{fontSize:12,color:C.muted,marginTop:2}}>{needleLibrary.length} needle{needleLibrary.length!==1?"s":""} recorded</div>
               </div>
-              <button onClick={()=>openModal("newNeedle",{nType:"Circular"})} style={btnPrimary}>+ Add needle</button>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                <button onClick={()=>{const blob=new Blob([JSON.stringify(needleLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="needle-library.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setNeedleLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>openModal("newNeedle",{nType:"Circular"})} style={btnPrimary}>+ Add needle</button>
+              </div>
             </div>
             {needleLibrary.length===0?(
               <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
@@ -3288,7 +3297,11 @@ export default function KnittingApp() {
                 <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>🛠 Tools Library</div>
                 <div style={{fontSize:12,color:C.muted,marginTop:2}}>{equipLibrary.length} item{equipLibrary.length!==1?"s":""} recorded</div>
               </div>
-              <button onClick={()=>openModal("newTool",{eType:"Wheel"})} style={btnPrimary}>+ Add tool</button>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                <button onClick={()=>{const blob=new Blob([JSON.stringify(equipLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tools-library.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setEquipLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>openModal("newTool",{eType:"Wheel"})} style={btnPrimary}>+ Add tool</button>
+              </div>
             </div>
             {equipLibrary.length===0?(
               <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
@@ -3339,7 +3352,11 @@ export default function KnittingApp() {
                 <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>🧶 Yarn Stash</div>
                 <div style={{fontSize:12,color:C.muted,marginTop:2}}>{yarnLibrary.length} yarn{yarnLibrary.length!==1?"s":""} recorded</div>
               </div>
-              <button onClick={()=>openModal("newYarnEntry",{})} style={btnPrimary}>+ Add yarn</button>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                <button onClick={()=>{const blob=new Blob([JSON.stringify(yarnLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="yarn-stash.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setYarnLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>openModal("newYarnEntry",{})} style={btnPrimary}>+ Add yarn</button>
+              </div>
             </div>
             {yarnLibrary.length===0?(
               <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
@@ -3381,7 +3398,11 @@ export default function KnittingApp() {
                 <div style={{fontSize:20,fontWeight:"bold",color:C.text}}>🌿 Fibre Stash</div>
                 <div style={{fontSize:12,color:C.muted,marginTop:2}}>{fibreLibrary.length} fibre{fibreLibrary.length!==1?"s":""} recorded</div>
               </div>
-              <button onClick={()=>openModal("newFibre",{})} style={btnPrimary}>+ Add fibre</button>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                <button onClick={()=>{const blob=new Blob([JSON.stringify(fibreLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="fibre-stash.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setFibreLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>openModal("newFibre",{})} style={btnPrimary}>+ Add fibre</button>
+              </div>
             </div>
             {fibreLibrary.length===0?(
               <div style={{textAlign:"center",padding:"60px 0",color:C.muted,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}}>
