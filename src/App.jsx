@@ -492,10 +492,6 @@ export default function KnittingApp() {
   const openModal  = (name,data={})=>{setModal(name);setModalData(data);};
   const closeModal = ()=>{setModal(null);setModalData({});};
 
-  // Resize form
-  const [newRows, setNewRows] = useState(20);
-  const [newCols, setNewCols] = useState(30);
-
   // Import
   const [importText,    setImportText]    = useState("");
   const [importImage,   setImportImage]   = useState(null);
@@ -812,13 +808,6 @@ export default function KnittingApp() {
   };
 
   // ── Resize section ────────────────────────────────────────────────────
-  const applyResize = ()=>{
-    const r=Math.max(1,Math.min(300,newRows)),c=Math.max(1,Math.min(300,newCols));
-    const ng=createGrid(r,c);
-    for(let ri=0;ri<Math.min(r,grid.length);ri++) for(let ci=0;ci<Math.min(c,grid[0]?.length||0);ci++) ng[ri][ci]={...grid[ri][ci]};
-    updateActiveSection({rows:r,cols:c,grid:ng,completedRows:[],currentRow:r-1,rowWidths:{},mistakeMarkers:{},stitchMarkers:[],rowNotes:{}});
-    setSelection(null);setSelAction(null);closeModal();
-  };
   const applyResizeDirectional = (orgRows,orgCols,dTop,dBottom,dLeft,dRight)=>{
     const r=Math.max(1,orgRows+dTop+dBottom);
     const c=Math.max(1,orgCols+dLeft+dRight);
@@ -2469,7 +2458,7 @@ export default function KnittingApp() {
                   <button onClick={()=>setZoom(z=>Math.min(3,+(z+0.25).toFixed(2)))} style={{padding:"5px 9px",border:"none",background:"transparent",cursor:"pointer",fontSize:14,color:C.text,fontFamily:"inherit"}}>+</button>
                 </div>
                 {editMode&&<>
-                  <button onClick={()=>{setNewRows(gridRows);setNewCols(gridCols);openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0});}} style={btnSecondary}>⊞ Resize</button>
+                  <button onClick={()=>openModal("resize",{orgRows:gridRows,orgCols:gridCols,dTop:0,dBottom:0,dLeft:0,dRight:0})} style={btnSecondary}>⊞ Resize</button>
                   <button onClick={()=>openModal("repeat")} style={btnSecondary}>⌷ Section marker</button>
                   <button onClick={()=>{setImportText("");setImportImage(null);setImportError("");openModal("import");}} style={btnPrimary}>🪄 Import</button>
                 </>}
@@ -3232,7 +3221,7 @@ export default function KnittingApp() {
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 <button onClick={()=>{const blob=new Blob([JSON.stringify(needleLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="needle-library.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
-                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setNeedleLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setNeedleLibrary(d);else alert("Import failed — the file doesn't look like a valid needle library backup.");}catch{alert("Import failed — the file doesn't look like a valid needle library backup.");}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
                 <button onClick={()=>openModal("newNeedle",{nType:"Circular"})} style={btnPrimary}>+ Add needle</button>
               </div>
             </div>
@@ -3299,7 +3288,7 @@ export default function KnittingApp() {
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 <button onClick={()=>{const blob=new Blob([JSON.stringify(equipLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tools-library.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
-                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setEquipLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setEquipLibrary(d);else alert("Import failed — the file doesn't look like a valid tool library backup.");}catch{alert("Import failed — the file doesn't look like a valid tool library backup.");}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
                 <button onClick={()=>openModal("newTool",{eType:"Wheel"})} style={btnPrimary}>+ Add tool</button>
               </div>
             </div>
@@ -3354,7 +3343,7 @@ export default function KnittingApp() {
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 <button onClick={()=>{const blob=new Blob([JSON.stringify(yarnLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="yarn-stash.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
-                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setYarnLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setYarnLibrary(d);else alert("Import failed — the file doesn't look like a valid yarn stash backup.");}catch{alert("Import failed — the file doesn't look like a valid yarn stash backup.");}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
                 <button onClick={()=>openModal("newYarnEntry",{})} style={btnPrimary}>+ Add yarn</button>
               </div>
             </div>
@@ -3400,7 +3389,7 @@ export default function KnittingApp() {
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 <button onClick={()=>{const blob=new Blob([JSON.stringify(fibreLibrary,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="fibre-stash.json";a.click();}} style={{...btnSecondary,fontSize:12}}>⬇ Export</button>
-                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setFibreLibrary(d);}catch{}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
+                <button onClick={()=>{const f=document.createElement("input");f.type="file";f.accept=".json";f.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d))setFibreLibrary(d);else alert("Import failed — the file doesn't look like a valid fibre stash backup.");}catch{alert("Import failed — the file doesn't look like a valid fibre stash backup.");}};r.readAsText(file);};f.click();}} style={{...btnSecondary,fontSize:12}}>⬆ Import</button>
                 <button onClick={()=>openModal("newFibre",{})} style={btnPrimary}>+ Add fibre</button>
               </div>
             </div>
