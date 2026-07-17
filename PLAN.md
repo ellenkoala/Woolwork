@@ -49,6 +49,7 @@
 - [ ] Add Supabase environment variables to the hosting platform
 - [ ] Confirm production build works end-to-end
 - [ ] Set a custom domain if desired
+- [ ] Replace `README.md`'s intro/announcement text with real setup instructions — kept as just an intro on purpose for now since the app isn't ready for other people to set up or use yet; swap it in once ready to open access
 
 ## Phase 8: Multi-User Readiness (before opening signups to real users)
 Currently only one account (mine) exists — not urgent yet, but must be checked before inviting other users.
