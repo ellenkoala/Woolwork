@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./supabase.js";
+import {
+  createGrid, newId, today, contrastText, hexToRgba,
+  formatFlexDate, parsePurchaseDate, makeSection, MONTH_NAMES,
+  extractSelection, rotateCW, flipH, flipV,
+  migrateProject,
+} from "./utils.js";
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 const DEFAULT_THEME = {
@@ -57,20 +63,6 @@ const YARN_BRANDS   = ["Malabrigo","Madelinetosh","Hedgehog Fibres","Quince & Co
 const FIBRE_PREPS   = ["Raw fleece","Washed fleece","Combed top","Carded batt","Roving","Pencil roving","Other"];
 const REPEAT_COLORS = ["#4a90d9","#6ab04c","#d4a017","#9b59b6","#e74c3c","#1abc9c","#e67e22","#34495e"];
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function createGrid(rows,cols){return Array.from({length:rows},()=>Array.from({length:cols},()=>({stitch:"empty",yarn:null})));}
-function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
-function today(){return new Date().toISOString().slice(0,10);}
-function contrastText(hex){if(!hex)return"#000";const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return(r*299+g*587+b*114)/1000>128?"#222":"#fff";}
-function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
-const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
-function formatFlexDate(d){if(!d)return"";const[y,m,day]=d.split("-");if(!m)return y;if(!day)return`${MONTH_NAMES[parseInt(m)-1]} ${y}`;return`${parseInt(day)} ${MONTH_NAMES[parseInt(m)-1]} ${y}`;}
-function parsePurchaseDate(d){if(!d)return{y:"",m:"",day:""};const[y="",m="",day=""]= d.split("-");return{y,m,day};};
-
-function makeSection(name="Section 1",rows=20,cols=30){
-  return {id:newId(),name,rows,cols,grid:createGrid(rows,cols),completedRows:[],currentRow:rows-1,currentCol:null,rowNotes:{},rowWidths:{},rowRepeats:{},mistakeMarkers:{},stitchMarkers:[],repeatMarkers:[],patternRepeats:[],rowRangeTrackers:[]};
-}
-
 const INIT_PROJECTS = [
   {id:"p1",name:"Zauberball Wave Scarf",yarn:"Schoppel Zauberball Crazy",needles:"2.75mm",status:"Active",type:"Accessory",
    notes:"Two-colour brioche scallop wave.",photos:[],log:[],created:"2024-11-01",
@@ -90,19 +82,6 @@ const SYSTEM_PROMPT = `You are a knitting pattern interpreter. Convert the knitt
 Available stitch IDs: empty, knit, purl, yo, k2tog, ssk, sl, co, bo, c4f, c4b, m1l, m1r, brk, brp, mb
 Respond ONLY with valid JSON, no markdown: {"rows":[["knit","purl",...],...],"notes":"Brief summary"}
 Rules: Each array = one row left to right. All rows same length. Expand repeats. Max 40 cols, 30 rows. Row 1 = bottom. Only return JSON.`;
-
-// ── Selection helpers ──────────────────────────────────────────────────────
-function extractSelection(grid,sel){
-  const r1=Math.min(sel.r1,sel.r2),r2=Math.max(sel.r1,sel.r2);
-  const c1=Math.min(sel.c1,sel.c2),c2=Math.max(sel.c1,sel.c2);
-  return {r1,r2,c1,c2,cells:grid.slice(r1,r2+1).map(row=>row.slice(c1,c2+1).map(c=>({...c})))};
-}
-function rotateCW(cells){
-  const rows=cells.length,cols=cells[0].length;
-  return Array.from({length:cols},(_,ci)=>Array.from({length:rows},(_,ri)=>({...cells[rows-1-ri][ci]})));
-}
-function flipH(cells){return cells.map(row=>[...row].reverse().map(c=>({...c})));}
-function flipV(cells){return [...cells].reverse().map(row=>row.map(c=>({...c})));}
 
 // ── Export builders (pure, module-scope) ──────────────────────────────────
 function buildKnittingHTML(project,section,stitchesList,cpLine){
@@ -157,20 +136,8 @@ function buildSpinningHTML(sp,cpLine){
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${sp.name} &#8212; Spinning</title><style>body{font-family:Georgia,serif;background:#f5f0eb;color:#3a2a1a;margin:0;padding:24px}.card{background:#fff;border:1px solid #d4c5b0;border-radius:8px;padding:24px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}th{background:#ede5da;padding:6px 10px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9a8a7a}td{padding:6px 10px;border-bottom:1px solid #ede5da}@media print{body{padding:12px}.card{break-inside:avoid}}</style></head><body><div class="card"><h1 style="font-size:22px;margin:0 0 4px">${sp.name}</h1><div style="font-size:12px;color:#9a8a7a;margin-bottom:18px">Created ${sp.created||""} &#183; <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:bold;background:${stBg};color:#fff">${sp.status}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">${h2("Fibre")+g2+`<div style="margin-bottom:9px"><div style="font-size:9px;color:#9a8a7a;letter-spacing:1px;text-transform:uppercase">${fibers.length>1?"BLEND":"TYPE"}</div>${typeof fiberHTML==="string"?`<div style="font-size:13px">${fiberHTML}</div>`:fiberHTML}</div>`+item("Purchased Weight",sp.fiberWeight?sp.fiberWeight+"g":"")+item("Source / Dyer",sp.source)+item("Colorway",sp.colorway)+item("Purchased at",sp.purchasePlace)+"</div>"+h2("Tool")+g2+item("Tool",sp.tool)+item("Details",sp.toolDetails)+item("Ratio / Whorl",sp.ratio)+item("Plies",sp.plies?sp.plies+"-ply":"")+item("Target Yardage",sp.targetYardage?sp.targetYardage+" yds":"")+"</div>"}</div>${h2("Processing")}<table><tr><th>Stage</th><th>Weight</th><th>Yield</th></tr><tr><td>Purchased (raw)</td><td>${sp.fiberWeight||"&#8212;"}g</td><td>&#8212;</td></tr><tr><td>After Washing</td><td>${sp.washedWeight?sp.washedWeight+"g":"not recorded"}</td><td>${washYld}</td></tr><tr><td>After Prep (carding/combing)</td><td>${sp.preparedWeight?sp.preparedWeight+"g":"not recorded"}</td><td>${prepYld}</td></tr></table>${h2("Progress")}${g2}${item("Spun",(sp.gSpun||0)+"g")}${item("Plied",(sp.gPlied||0)+"g")}${item("Finished Yardage",(sp.finishedYardage||0)+(sp.targetYardage?" / "+sp.targetYardage+" target":""))}${item("WPI",sp.wpi||0)}</div>${sp.log?.length?h2("Work Log")+`<table><tr><th>Date</th><th>Hours</th><th>Grams Spun</th><th>Notes</th></tr>${logRows}${logTotal}</table>`:""}${sp.photos?.length?h2("Photos")+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">${photos}</div>`:""}${sp.notes?h2("Notes")+`<div style="font-size:13px;white-space:pre-wrap">${sp.notes}</div>`:""}${cpHtml}</div></body></html>`;
 }
 
-// ── Persistence version & migration ───────────────────────────────────────
+// ── Persistence version ─────────────────────────────────────────────────
 const SAVE_VERSION = 1;
-
-function migrateSection(s) {
-  return {
-    rowRangeTrackers:[],patternRepeats:[],repeatMarkers:[],
-    stitchMarkers:[],mistakeMarkers:{},rowRepeats:{},
-    rowWidths:{},rowNotes:{},completedRows:[],currentCol:null,
-    ...s,
-  };
-}
-function migrateProject(p) {
-  return {yarnPalette:[],photos:[],log:[],notes:"",...p,sections:(p.sections||[]).map(migrateSection)};
-}
 
 // ── Modal (outside component so it never remounts on re-render) ────────────
 function Modal({title,onClose,children,width=480,theme}){
