@@ -1,40 +1,19 @@
 # Woolwork
+Knitting app
+🧶 Excited to share a personal project I've been building — Woolwork, a web app for fibre crafters!
 
-A knitting and spinning project tracker. Track knitting patterns on a stitch grid, log spinning projects, and keep a library of yarn, fibre, needles, and tools — synced to the cloud via Supabase, with a guest mode for local-only use.
+As a knitter and spinner, I wanted a single place to manage my creative projects and craft stash — so I built one.
 
-## Setup
+What it does:
 
-Install dependencies:
+🎨 Visual stitch grid for designing colourwork knitting patterns
+🪢 Spinning project tracker with session logging
+📌 Needle, tool, yarn, and fibre stash libraries
+☁️ Cloud sync so your data follows you across devices
+🔒 Private accounts — each user's data is completely their own. Still at Bata version.
+What I built it with:
+React · Vite · Supabase (auth + database) · Vercel
 
-```
-npm install
-```
+This was a great opportunity to work with user authentication, row-level security, real-time data sync, and full deployment from scratch.
 
-Create a `.env` file in the project root with:
-
-```
-# Supabase (required for login/sync — the app also works in guest mode without these)
-VITE_SUPABASE_URL=your-supabase-project-url
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-
-# Anthropic (only needed for the AI pattern-import feature, local dev only)
-ANTHROPIC_KEY=your-anthropic-api-key
-```
-
-`.env` is already listed in `.gitignore` — never commit it.
-
-Run the app locally:
-
-```
-npm run dev
-```
-
-## Scripts
-
-- `npm run dev` — start the local dev server
-- `npm run build` — build for production (output in `dist/`)
-- `npm run preview` — preview the production build locally
-
-## Project status
-
-See [PLAN.md](PLAN.md) for the deployment roadmap and what's currently done.
+Still a work in progress, but already fully usable — and a fun way to combine a hobby with hands-on development! 🌿
