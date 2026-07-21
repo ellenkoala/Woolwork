@@ -2626,7 +2626,7 @@ export default function KnittingApp() {
             {/* Coordinate bar */}
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,fontFamily:"monospace",fontSize:11,userSelect:"none"}}>
               {hoverCell
-                ? <><span style={{color:C.text}}>col <strong>{hoverCell.col}</strong></span><span style={{color:C.muted}}>·</span><span style={{color:C.text}}>row <strong>{gridRows-hoverCell.row}</strong></span></>
+                ? <><span style={{color:C.text}}>col <strong>{hoverCell.col+1}</strong></span><span style={{color:C.muted}}>·</span><span style={{color:C.text}}>row <strong>{gridRows-hoverCell.row}</strong></span></>
                 : <span style={{color:C.border}}>— · —</span>}
               <span style={{color:C.border,marginLeft:4}}>{gridCols} × {gridRows}</span>
             </div>
@@ -2638,30 +2638,31 @@ export default function KnittingApp() {
                     <div style={{display:"flex",flexDirection:"column"}}>
                       <div style={{display:"flex"}}>
                         {Array.from({length:gridCols},(_,ci)=>{
-                          // 0-indexed: ci=0 → label "0", ci=9 → label "10", etc.
-                          const n=ci,isZero=n===0,isTen=n>0&&n%10===0,isFive=n>0&&n%5===0&&!isTen,isCurCol=ci===currentCol;
-                          const showNum=isCurCol||isZero||isTen||isFive;
+                          // 1-indexed to match the stitches themselves: the column between line 0 and line 1 is stitch 1.
+                          // The number is centered on the line to the RIGHT of this column (i.e. line n), not on the column itself.
+                          const n=ci+1,isFirst=ci===0,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          const showNum=isCurCol||isFirst||isTen||isFive;
                           return <div key={ci} onClick={()=>setCurrentCol(isCurCol?null:ci)}
                             title={isCurCol?`Col ${n} — click to clear`:`Click to mark col ${n}`}
-                            style={{width:cellSize,flexShrink:0,textAlign:"center",fontSize:8,lineHeight:"14px",cursor:"pointer",
-                              color:isCurCol?contrastText(C.accent):(isZero||isTen)?C.accent:C.muted,
-                              fontWeight:(isCurCol||isZero||isTen)?"bold":"normal",
+                            style={{width:cellSize,height:14,flexShrink:0,position:"relative",cursor:"pointer",
                               background:isCurCol?C.accent:"transparent",borderRadius:isCurCol?2:0}}>
-                            {showNum?n:""}
+                            {showNum&&<span style={{position:"absolute",right:0,top:0,transform:"translateX(50%)",fontSize:8,lineHeight:"14px",
+                              color:isCurCol?contrastText(C.accent):(isFirst||isTen)?C.accent:C.muted,
+                              fontWeight:(isCurCol||isFirst||isTen)?"bold":"normal"}}>{n}</span>}
                           </div>;
                         })}
                       </div>
                       <div style={{display:"flex"}}>
                         {Array.from({length:gridCols},(_,ci)=>{
-                          const n=ci,isZero=n===0,isTen=n>0&&n%10===0,isFive=n>0&&n%5===0&&!isTen,isCurCol=ci===currentCol;
+                          const n=ci+1,isFirst=ci===0,isTen=n%10===0,isFive=n%5===0&&!isTen,isCurCol=ci===currentCol;
                           const isHov=hoverCell&&hoverCell.col===ci;
-                          // 10th/0 tick: 8px 2px wide; 5th tick: 4px 1.5px wide; curCol/hover override
-                          const h=isCurCol?8:(isZero||isTen)?8:isFive?4:0;
-                          const w=isCurCol?2:(isZero||isTen)?2:1.5;
+                          // 10th/first tick: 8px 2px wide; 5th tick: 4px 1.5px wide; curCol/hover override
+                          const h=isCurCol?8:(isFirst||isTen)?8:isFive?4:0;
+                          const w=isCurCol?2:(isFirst||isTen)?2:1.5;
                           const bg=isCurCol?C.accent:isHov?"#4a90d9":C.accent;
-                          return <div key={ci} style={{width:cellSize,flexShrink:0,display:"flex",flexDirection:"column",justifyContent:"flex-start",alignItems:"center",position:"relative"}}>
-                            {h>0&&<div style={{width:w,height:h,background:bg,transition:"background 0.1s"}}/>}
-                            {isHov&&!isCurCol&&<div style={{position:"absolute",bottom:-1,width:0,height:0,borderLeft:"3px solid transparent",borderRight:"3px solid transparent",borderTop:"4px solid #4a90d9"}}/>}
+                          return <div key={ci} style={{width:cellSize,height:8,flexShrink:0,position:"relative"}}>
+                            {h>0&&<div style={{position:"absolute",right:0,top:0,transform:"translateX(50%)",width:w,height:h,background:bg,transition:"background 0.1s"}}/>}
+                            {isHov&&!isCurCol&&<div style={{position:"absolute",right:0,bottom:-1,transform:"translateX(50%)",width:0,height:0,borderLeft:"3px solid transparent",borderRight:"3px solid transparent",borderTop:"4px solid #4a90d9"}}/>}
                           </div>;
                         })}
                       </div>
@@ -2705,7 +2706,7 @@ export default function KnittingApp() {
                               </div>
                             );
                           })}
-                          <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:3,paddingRight:4,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
+                          <div style={{width:96,boxSizing:"border-box",flexShrink:0,display:"flex",alignItems:"center",gap:3,paddingRight:4,borderLeft:isCurrent?`3px solid ${C.accent}`:"3px solid transparent"}}>
                             <button onClick={()=>toggleRowComplete(ri)} style={{width:13,height:13,borderRadius:"50%",flexShrink:0,border:done?"none":`1px solid ${C.border}`,background:done?C.accent:"transparent",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                               {done&&<span style={{color:contrastText(C.accent),fontSize:7,fontWeight:"bold"}}>✓</span>}
                             </button>
@@ -2794,7 +2795,7 @@ export default function KnittingApp() {
                     {/* Row 0 */}
                     <div style={{display:"flex",alignItems:"center",borderTop:`2px solid ${C.accent}`,marginTop:1}}>
                       {rowRangeTrackers.map(tr=><div key={tr.id} style={{width:16,flexShrink:0}}/>)}
-                      <div style={{width:96,flexShrink:0,display:"flex",alignItems:"center",gap:4,paddingLeft:3}}>
+                      <div style={{width:96,boxSizing:"border-box",flexShrink:0,display:"flex",alignItems:"center",gap:4,paddingLeft:3}}>
                         <span style={{fontSize:9,color:C.accent,fontWeight:"bold"}}>0</span>
                         <span style={{fontSize:8,color:C.muted,fontStyle:"italic"}}>Cast On</span>
                       </div>
