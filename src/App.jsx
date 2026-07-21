@@ -6,82 +6,13 @@ import {
   extractSelection, rotateCW, flipH, flipV,
   migrateProject,
 } from "./utils.js";
-
-// ── Theme ──────────────────────────────────────────────────────────────────
-const DEFAULT_THEME = {
-  bg:"#f5f0eb", surface:"#ffffff", surface2:"#ede5da", border:"#d4c5b0",
-  text:"#3a2a1a", muted:"#9a8a7a", accent:"#b8834a", green:"#6a9a6a", red:"#c0504a",
-};
-const THEME_FIELDS = [
-  {key:"bg",label:"Page background"},{key:"surface",label:"Card / panel"},
-  {key:"surface2",label:"Secondary panel"},{key:"border",label:"Borders"},
-  {key:"text",label:"Primary text"},{key:"muted",label:"Muted text"},
-  {key:"accent",label:"Accent (buttons, highlights)"},{key:"green",label:"Success / Complete"},
-  {key:"red",label:"Error / Mistake"},
-];
-
-// ── Stitches ───────────────────────────────────────────────────────────────
-const BUILTIN_STITCHES = [
-  {id:"co",  label:"Cast On",   symbol:"▓",abbr:"CO", group:"cast",    desc:"Cast on — foundation row"},
-  {id:"bo",  label:"Cast Off",  symbol:"═",abbr:"BO", group:"cast",    desc:"Bind off stitch"},
-  {id:"empty",label:"Empty",   symbol:"", abbr:"",   group:"basic",   desc:"No stitch"},
-  {id:"knit",label:"Knit",     symbol:"□",abbr:"K",  group:"basic",   desc:"Knit stitch (RS)"},
-  {id:"purl",label:"Purl",     symbol:"−",abbr:"P",  group:"basic",   desc:"Purl stitch"},
-  {id:"yo",  label:"Yarn Over", symbol:"O",abbr:"YO", group:"basic",   desc:"Yarn over"},
-  {id:"sl",  label:"Slip",      symbol:"V",abbr:"SL", group:"basic",   desc:"Slip stitch purlwise"},
-  {id:"k2tog",label:"K2tog",   symbol:"\\",abbr:"K2T",group:"decrease",desc:"Knit 2 together"},
-  {id:"ssk", label:"SSK",       symbol:"/",abbr:"SSK",group:"decrease",desc:"Slip slip knit"},
-  {id:"m1l", label:"M1L",       symbol:"↖",abbr:"M1L",group:"increase",desc:"Make 1 left"},
-  {id:"m1r", label:"M1R",       symbol:"↗",abbr:"M1R",group:"increase",desc:"Make 1 right"},
-  {id:"c4f", label:"C4F",       symbol:"><",abbr:"C4F",group:"cable",  desc:"Cable 4 front"},
-  {id:"c4b", label:"C4B",       symbol:"<>",abbr:"C4B",group:"cable",  desc:"Cable 4 back"},
-  {id:"brk", label:"brk",       symbol:"⊕",abbr:"BRK",group:"brioche",desc:"Brioche knit"},
-  {id:"brp", label:"brp",       symbol:"⊙",abbr:"BRP",group:"brioche",desc:"Brioche purl"},
-  {id:"mb",  label:"Bobble",    symbol:"✦",abbr:"MB", group:"texture", desc:"Make bobble"},
-  {id:"mistake",label:"Mistake",symbol:"!",abbr:"ERR",group:"marker",  desc:"Mistake marker"},
-];
-const GROUPS = ["cast","basic","decrease","increase","cable","brioche","texture","marker","custom"];
-const GROUP_LABELS = {cast:"Cast On/Off",basic:"Basic",decrease:"Decrease",increase:"Increase",cable:"Cable",brioche:"Brioche",texture:"Texture",marker:"Markers",custom:"Custom"};
-const STITCH_SHADES = {co:"#444",bo:"#666",empty:"#f5f0eb",knit:"#e8e0d8",purl:"#d0c4b8",yo:"#f0e8e0",sl:"#dcd4cc",k2tog:"#c8beb4",ssk:"#c8beb4",m1l:"#e4dcd4",m1r:"#dcd4cc",c4f:"#ccc4b8",c4b:"#ccc4b8",brk:"#b8b0a8",brp:"#c8c0b8",mb:"#e8e0d8",mistake:"#fdecea"};
-const STITCH_TEXT  = {co:"#fff",bo:"#fff",empty:"#ccc",knit:"#5a4a3a",purl:"#4a3a2a",yo:"#7a6a5a",sl:"#6a5a4a",k2tog:"#3a2a1a",ssk:"#3a2a1a",m1l:"#5a4a3a",m1r:"#5a4a3a",c4f:"#3a2a1a",c4b:"#3a2a1a",brk:"#fff",brp:"#3a2a1a",mb:"#5a4a3a",mistake:"#c0504a"};
-
-const PROJECT_STATUSES  = ["Active","Paused","On Hold","Complete"];
-const BUILTIN_PROJECT_TYPES = ["Garment","Accessory","Home","Other"];
-
-// ── Spinning constants ─────────────────────────────────────────────────────
-const SPIN_STATUSES = ["Active","Plying","Finished"];
-const FIBER_TYPES   = ["Merino","BFL","Corriedale","Corriedale Cross","Alpaca","Silk","Cashmere","Mohair","Linen","Cotton","Other"];
-const SPIN_TOOLS    = ["Wheel","Drop Spindle","Supported Spindle"];
-
-// ── Needle constants ────────────────────────────────────────────────────────
-const NEEDLE_TYPES = ["Circular","DPN","Straight","Interchangeable Tips"];
-const NEEDLE_BRANDS = ["Addi","ChiaoGoo","HiyaHiya","KnitPro","Lykke","Clover","Pony","Drops","Signature Needle Arts","Lantern Moon","Brittany","Tulip","Other"];
-const MM_TO_US = {"2.0":"0","2.25":"1","2.75":"2","3.25":"3","3.5":"4","3.75":"5","4.0":"6","4.5":"7","5.0":"8","5.5":"9","6.0":"10","6.5":"10½","7.0":"10¾","8.0":"11","9.0":"13","10.0":"15","12.0":"17","15.0":"19","19.0":"35","25.0":"50"};
-const EQUIP_TYPES   = ["Wheel","Drop Spindle","Supported Spindle","Lazy Kate","Niddy Noddy","Swift","Ball Winder","Other"];
-const YARN_WEIGHTS  = ["Lace","Fingering","Sport","DK","Worsted","Aran","Bulky","Super Bulky"];
-const YARN_BRANDS   = ["Malabrigo","Madelinetosh","Hedgehog Fibres","Quince & Co","Cascade","Drops","Paintbox","West Yorkshire Spinners","Rowan","Lang Yarns","Noro","Schoppel","The Fibre Co","Woolfolk","Brooklyn Tweed","Knit Picks","Other"];
-const FIBRE_PREPS   = ["Raw fleece","Washed fleece","Combed top","Carded batt","Roving","Pencil roving","Other"];
-const REPEAT_COLORS = ["#4a90d9","#6ab04c","#d4a017","#9b59b6","#e74c3c","#1abc9c","#e67e22","#34495e"];
-
-const INIT_PROJECTS = [
-  {id:"p1",name:"Zauberball Wave Scarf",yarn:"Schoppel Zauberball Crazy",needles:"2.75mm",status:"Active",type:"Accessory",
-   notes:"Two-colour brioche scallop wave.",photos:[],log:[],created:"2024-11-01",
-   yarnPalette:[{id:"y1",name:"CA – Black",color:"#1a1a1a"},{id:"y2",name:"CB – Zauberball",color:"#7a4a9a"}],
-   sections:[makeSection("Main Pattern",20,30)],activeSectionId:null},
-  {id:"p2",name:"Cable Knit Sweater",yarn:"Merino Wool – Oatmeal",needles:"5mm",status:"Paused",type:"Garment",
-   notes:"",photos:[],log:[],created:"2024-09-15",
-   yarnPalette:[{id:"y3",name:"Main – Oatmeal",color:"#d4c5a0"}],
-   sections:[makeSection("Body",24,40),makeSection("Sleeve",20,28)],activeSectionId:null},
-  {id:"p3",name:"Lace Shawl",yarn:"Fingering Weight – Blush",needles:"3.5mm",status:"Active",type:"Accessory",
-   notes:"",photos:[],log:[],created:"2024-12-01",
-   yarnPalette:[{id:"y4",name:"Main – Blush",color:"#e8b4a8"}],
-   sections:[makeSection("Chart A",16,24),makeSection("Chart B",12,20),makeSection("Border",8,30)],activeSectionId:null},
-];
-
-const SYSTEM_PROMPT = `You are a knitting pattern interpreter. Convert the knitting pattern into a stitch grid.
-Available stitch IDs: empty, knit, purl, yo, k2tog, ssk, sl, co, bo, c4f, c4b, m1l, m1r, brk, brp, mb
-Respond ONLY with valid JSON, no markdown: {"rows":[["knit","purl",...],...],"notes":"Brief summary"}
-Rules: Each array = one row left to right. All rows same length. Expand repeats. Max 40 cols, 30 rows. Row 1 = bottom. Only return JSON.`;
+import {
+  DEFAULT_THEME, THEME_FIELDS, BUILTIN_STITCHES, GROUPS, GROUP_LABELS,
+  STITCH_SHADES, STITCH_TEXT, PROJECT_STATUSES, BUILTIN_PROJECT_TYPES,
+  SPIN_STATUSES, FIBER_TYPES, SPIN_TOOLS, NEEDLE_TYPES, NEEDLE_BRANDS,
+  MM_TO_US, EQUIP_TYPES, YARN_WEIGHTS, YARN_BRANDS, FIBRE_PREPS,
+  REPEAT_COLORS, INIT_PROJECTS, SYSTEM_PROMPT, SAVE_VERSION,
+} from "./constants.js";
 
 // ── Export builders (pure, module-scope) ──────────────────────────────────
 function buildKnittingHTML(project,section,stitchesList,cpLine){
@@ -135,9 +66,6 @@ function buildSpinningHTML(sp,cpLine){
     :fibers[0]?.type||"";
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${sp.name} &#8212; Spinning</title><style>body{font-family:Georgia,serif;background:#f5f0eb;color:#3a2a1a;margin:0;padding:24px}.card{background:#fff;border:1px solid #d4c5b0;border-radius:8px;padding:24px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}th{background:#ede5da;padding:6px 10px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9a8a7a}td{padding:6px 10px;border-bottom:1px solid #ede5da}@media print{body{padding:12px}.card{break-inside:avoid}}</style></head><body><div class="card"><h1 style="font-size:22px;margin:0 0 4px">${sp.name}</h1><div style="font-size:12px;color:#9a8a7a;margin-bottom:18px">Created ${sp.created||""} &#183; <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:bold;background:${stBg};color:#fff">${sp.status}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">${h2("Fibre")+g2+`<div style="margin-bottom:9px"><div style="font-size:9px;color:#9a8a7a;letter-spacing:1px;text-transform:uppercase">${fibers.length>1?"BLEND":"TYPE"}</div>${typeof fiberHTML==="string"?`<div style="font-size:13px">${fiberHTML}</div>`:fiberHTML}</div>`+item("Purchased Weight",sp.fiberWeight?sp.fiberWeight+"g":"")+item("Source / Dyer",sp.source)+item("Colorway",sp.colorway)+item("Purchased at",sp.purchasePlace)+"</div>"+h2("Tool")+g2+item("Tool",sp.tool)+item("Details",sp.toolDetails)+item("Ratio / Whorl",sp.ratio)+item("Plies",sp.plies?sp.plies+"-ply":"")+item("Target Yardage",sp.targetYardage?sp.targetYardage+" yds":"")+"</div>"}</div>${h2("Processing")}<table><tr><th>Stage</th><th>Weight</th><th>Yield</th></tr><tr><td>Purchased (raw)</td><td>${sp.fiberWeight||"&#8212;"}g</td><td>&#8212;</td></tr><tr><td>After Washing</td><td>${sp.washedWeight?sp.washedWeight+"g":"not recorded"}</td><td>${washYld}</td></tr><tr><td>After Prep (carding/combing)</td><td>${sp.preparedWeight?sp.preparedWeight+"g":"not recorded"}</td><td>${prepYld}</td></tr></table>${h2("Progress")}${g2}${item("Spun",(sp.gSpun||0)+"g")}${item("Plied",(sp.gPlied||0)+"g")}${item("Finished Yardage",(sp.finishedYardage||0)+(sp.targetYardage?" / "+sp.targetYardage+" target":""))}${item("WPI",sp.wpi||0)}</div>${sp.log?.length?h2("Work Log")+`<table><tr><th>Date</th><th>Hours</th><th>Grams Spun</th><th>Notes</th></tr>${logRows}${logTotal}</table>`:""}${sp.photos?.length?h2("Photos")+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">${photos}</div>`:""}${sp.notes?h2("Notes")+`<div style="font-size:13px;white-space:pre-wrap">${sp.notes}</div>`:""}${cpHtml}</div></body></html>`;
 }
-
-// ── Persistence version ─────────────────────────────────────────────────
-const SAVE_VERSION = 1;
 
 // ── Modal (outside component so it never remounts on re-render) ────────────
 function Modal({title,onClose,children,width=480,theme}){
