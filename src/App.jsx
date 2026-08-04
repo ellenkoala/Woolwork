@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./supabase.js";
 import {
   createGrid, newId, today, contrastText, hexToRgba,
-  makeSection,
+  makeSection, fiberDisplay, compressImage,
   extractSelection, rotateCW, flipH, flipV,
   migrateProject,
 } from "./utils.js";
@@ -646,28 +646,6 @@ export default function KnittingApp() {
   // ── Image compression helper ──────────────────────────────────────────
   // Resizes to max 1400px on longest side and compresses to JPEG ~75%
   // Keeps file size well under localStorage limits (~150-250KB output)
-  const compressImage=(file,maxPx=1400,quality=0.75)=>new Promise((resolve,reject)=>{
-    if(!file.type.startsWith("image/")){reject(new Error("Not an image file."));return;}
-    const reader=new FileReader();
-    reader.onerror=()=>reject(new Error("Could not read file."));
-    reader.onload=ev=>{
-      const img=new Image();
-      img.onerror=()=>reject(new Error("Could not load image."));
-      img.onload=()=>{
-        let w=img.naturalWidth,h=img.naturalHeight;
-        if(w===0||h===0){reject(new Error("Image has no dimensions."));return;}
-        const scale=Math.min(1,maxPx/Math.max(w,h));
-        w=Math.round(w*scale);h=Math.round(h*scale);
-        const canvas=document.createElement("canvas");
-        canvas.width=w;canvas.height=h;
-        canvas.getContext("2d").drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL("image/jpeg",quality));
-      };
-      img.src=ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-
   const handleImageFile=e=>{
     const file=e.target.files?.[0];if(!file)return;
     compressImage(file,1400,0.82)
@@ -817,11 +795,6 @@ export default function KnittingApp() {
   // ── Spinning derived ──────────────────────────────────────────────────
   const activeSpinProject = spinProjects.find(p=>p.id===activeSpinId)||null;
 
-  // Backward-compat display: supports old {fiberType} and new {fibers:[{type,pct}]}
-  const fiberDisplay = p => {
-    if(p.fibers?.length) return p.fibers.map(f=>f.pct<100?`${f.pct}% ${f.type}`:f.type).filter(Boolean).join(" / ");
-    return p.fiberType||"";
-  };
 
   const filteredSpinProjects = spinProjects.filter(p=>{
     const fd=fiberDisplay(p).toLowerCase();

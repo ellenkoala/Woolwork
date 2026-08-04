@@ -44,3 +44,37 @@ export function migrateSection(s) {
 export function migrateProject(p) {
   return {yarnPalette:[],photos:[],log:[],notes:"",...p,sections:(p.sections||[]).map(migrateSection)};
 }
+
+// ── Spinning fibre display ────────────────────────────────────────────────
+// Backward-compat: supports old {fiberType} and new {fibers:[{type,pct}]}
+export function fiberDisplay(p) {
+  if(p.fibers?.length) return p.fibers.map(f=>f.pct<100?`${f.pct}% ${f.type}`:f.type).filter(Boolean).join(" / ");
+  return p.fiberType||"";
+}
+
+// ── Image compression ─────────────────────────────────────────────────────
+// Scales an image file down to maxPx on its longest side and returns a
+// JPEG data URL. Used for both knitting-project and spinning-project photos.
+export function compressImage(file,maxPx=1400,quality=0.75){
+  return new Promise((resolve,reject)=>{
+    if(!file.type.startsWith("image/")){reject(new Error("Not an image file."));return;}
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error("Could not read file."));
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error("Could not load image."));
+      img.onload=()=>{
+        let w=img.naturalWidth,h=img.naturalHeight;
+        if(w===0||h===0){reject(new Error("Image has no dimensions."));return;}
+        const scale=Math.min(1,maxPx/Math.max(w,h));
+        w=Math.round(w*scale);h=Math.round(h*scale);
+        const canvas=document.createElement("canvas");
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",quality));
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}

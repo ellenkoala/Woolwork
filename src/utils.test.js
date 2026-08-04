@@ -14,6 +14,7 @@ import {
   flipV,
   migrateSection,
   migrateProject,
+  fiberDisplay,
 } from "./utils.js";
 
 describe("createGrid", () => {
@@ -255,5 +256,36 @@ describe("migrateProject", () => {
   it("never overwrites data that's already present", () => {
     const migrated = migrateProject({ id: "p1", notes: "keep me", sections: [] });
     expect(migrated.notes).toBe("keep me");
+  });
+});
+
+describe("fiberDisplay", () => {
+  it("joins a multi-fibre blend, showing each percentage", () => {
+    const p = { fibers: [{ type: "Merino", pct: 70 }, { type: "Silk", pct: 30 }] };
+    expect(fiberDisplay(p)).toBe("70% Merino / 30% Silk");
+  });
+
+  it("omits the percentage for a fibre that makes up the whole thing", () => {
+    expect(fiberDisplay({ fibers: [{ type: "Merino", pct: 100 }] })).toBe("Merino");
+  });
+
+  it("falls back to the legacy fiberType field when there's no fibers array", () => {
+    expect(fiberDisplay({ fiberType: "Corriedale" })).toBe("Corriedale");
+  });
+
+  it("prefers the fibers array over the legacy field when both exist", () => {
+    const p = { fibers: [{ type: "Alpaca", pct: 100 }], fiberType: "Merino" };
+    expect(fiberDisplay(p)).toBe("Alpaca");
+  });
+
+  it("returns an empty string when there's no fibre data at all", () => {
+    expect(fiberDisplay({})).toBe("");
+    expect(fiberDisplay({ fibers: [] })).toBe("");
+    expect(fiberDisplay({ fiberType: "" })).toBe("");
+  });
+
+  it("skips blank entries in a blend rather than leaving stray separators", () => {
+    const p = { fibers: [{ type: "Merino", pct: 100 }, { type: "", pct: 100 }] };
+    expect(fiberDisplay(p)).toBe("Merino");
   });
 });
