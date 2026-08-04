@@ -864,17 +864,6 @@ export default function KnittingApp() {
 
       {/* ═══ MODALS ═══════════════════════════════════════════════════════ */}
 
-      {appMode==="library"&&(
-        <LibraryView theme={C} btnPrimary={btnPrimary} btnSecondary={btnSecondary} btnDanger={btnDanger}
-          inp={inp} lbl={lbl} modal={modal} modalData={modalData} setModalData={setModalData}
-          openModal={openModal} closeModal={closeModal} libraryView={libraryView}
-          needleLibrary={needleLibrary} saveNeedle={saveNeedle} deleteNeedle={deleteNeedle} exportNeedles={exportNeedles} importNeedles={importNeedles}
-          equipLibrary={equipLibrary} saveTool={saveTool} deleteTool={deleteTool} exportTools={exportTools} importTools={importTools}
-          yarnLibrary={yarnLibrary} saveYarn={saveYarn} deleteYarn={deleteYarn} exportYarn={exportYarn} importYarn={importYarn}
-          fibreLibrary={fibreLibrary} saveFibre={saveFibre} deleteFibre={deleteFibre} exportFibre={exportFibre} importFibre={importFibre}
-        />
-      )}
-
       {/* Theme */}
       {modal==="theme"&&(
         <Modal theme={C} title="🎨 Customise Theme" onClose={closeModal} width={520}>
@@ -2625,7 +2614,17 @@ export default function KnittingApp() {
         </div>
         )}
 
-        {/* ═══ NEEDLE LIBRARY ══════════════════════════════════════════ */}
+        {/* ═══ LIBRARY ═════════════════════════════════════════════════ */}
+        {appMode==="library"&&(
+          <LibraryView theme={C} btnPrimary={btnPrimary} btnSecondary={btnSecondary} btnDanger={btnDanger}
+            inp={inp} lbl={lbl} modal={modal} modalData={modalData} setModalData={setModalData}
+            openModal={openModal} closeModal={closeModal} libraryView={libraryView}
+            needleLibrary={needleLibrary} saveNeedle={saveNeedle} deleteNeedle={deleteNeedle} exportNeedles={exportNeedles} importNeedles={importNeedles}
+            equipLibrary={equipLibrary} saveTool={saveTool} deleteTool={deleteTool} exportTools={exportTools} importTools={importTools}
+            yarnLibrary={yarnLibrary} saveYarn={saveYarn} deleteYarn={deleteYarn} exportYarn={exportYarn} importYarn={importYarn}
+            fibreLibrary={fibreLibrary} saveFibre={saveFibre} deleteFibre={deleteFibre} exportFibre={exportFibre} importFibre={importFibre}
+          />
+        )}
       </div>
     </div>
   );
