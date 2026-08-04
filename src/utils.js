@@ -2,7 +2,11 @@
 // No React state or hooks here — safe to import from anywhere, and easy to test.
 
 export function createGrid(rows,cols){return Array.from({length:rows},()=>Array.from({length:cols},()=>({stitch:"empty",yarn:null})));}
-export function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+// 8 random chars, not 4: ids created in the same millisecond share a timestamp prefix,
+// so the random part carries all the uniqueness. 4 chars (~1.7M combos) collided often
+// enough to matter — and a collision silently deletes two items at once, since deletes
+// filter by id.
+export function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
 export function today(){return new Date().toISOString().slice(0,10);}
 export function contrastText(hex){if(!hex)return"#000";const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return(r*299+g*587+b*114)/1000>128?"#222":"#fff";}
 export function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
